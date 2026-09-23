@@ -1,5 +1,5 @@
 import type { UIMessageChunk } from "ai";
-import type { ChatStage, EvalVerdict, VerityDataTypes } from "./chat-types";
+import type { ChatStage, EvalScores, EvalVerdict, Figure, VerityDataTypes } from "./chat-types";
 
 /**
  * Adapter from the FastAPI backend's SSE stream to AI SDK UI message chunks.
@@ -23,15 +23,16 @@ import type { ChatStage, EvalVerdict, VerityDataTypes } from "./chat-types";
 
 type Chunk = UIMessageChunk<unknown, VerityDataTypes>;
 
-type BackendSource = { source: string; page: string | number; chunk_index: number; content_type: string };
-type BackendScores = {
+export type BackendSource = { source: string; page: string | number; chunk_index: number; content_type: string };
+export type BackendImage = { path: string; page: string | number; source: string; content_type: string };
+export type BackendScores = {
   faithfulness: number | null;
   context_precision: number | null;
   threshold: number;
   passed: boolean;
 };
 type BackendEvent =
-  | { type: "meta"; sources?: BackendSource[]; trace_id?: string; session_id?: string }
+  | { type: "meta"; sources?: BackendSource[]; images?: BackendImage[]; trace_id?: string; session_id?: string }
   | { type: "stage"; stage: ChatStage; attempt?: number }
   | { type: "eval"; scores: BackendScores; verdict?: EvalVerdict; attempt?: number }
   | { type: "token"; content: string; attempt?: number }
@@ -66,6 +67,45 @@ function baseName(path: string): string {
 function mediaTypeOf(filename: string): string {
   const ext = filename.split(".").pop()?.toLowerCase() ?? "";
   return MEDIA_TYPES[ext] ?? "application/octet-stream";
+}
+
+/** A backend source as a source-document part. Shared with chats restored from history. */
+export function sourcePart(s: BackendSource) {
+  const name = baseName(s.source);
+  return {
+    type: "source-document" as const,
+    sourceId: String(s.chunk_index),
+    mediaType: mediaTypeOf(name),
+    title: name,
+    filename: name,
+    providerMetadata: { verity: { page: s.page, contentType: s.content_type } },
+  };
+}
+
+/**
+ * Backend image references as figures, each once; the source keeps only its
+ * file name. The backend attaches a figure to every retrieved chunk that
+ * cites it, so one chart can arrive several times.
+ */
+export function figuresOf(images: BackendImage[]): Figure[] {
+  const seen = new Set<string>();
+  return images.flatMap((i) => {
+    if (seen.has(i.path)) return [];
+    seen.add(i.path);
+    return [{ path: i.path, page: i.page, source: baseName(i.source), contentType: i.content_type }];
+  });
+}
+
+/** Backend gate scores as the eval data part. */
+export function evalData(scores: BackendScores, verdict?: EvalVerdict | null, attempt?: number): EvalScores {
+  return {
+    faithfulness: scores.faithfulness,
+    contextPrecision: scores.context_precision,
+    threshold: scores.threshold,
+    passed: scores.passed,
+    ...(verdict ? { verdict } : {}),
+    ...(attempt ? { attempt } : {}),
+  };
 }
 
 /** Parse `data: <json>` SSE events from a byte stream, tolerating arbitrary chunk boundaries. */
@@ -112,34 +152,15 @@ export async function* adaptBackendEvents(events: AsyncIterable<unknown>): Async
     switch (ev?.type) {
       case "meta":
         yield { type: "data-meta", data: { traceId: ev.trace_id ?? "", sessionId: ev.session_id ?? "" } };
-        for (const s of ev.sources ?? []) {
-          const name = baseName(s.source);
-          yield {
-            type: "source-document",
-            sourceId: String(s.chunk_index),
-            mediaType: mediaTypeOf(name),
-            title: name,
-            filename: name,
-            providerMetadata: { verity: { page: s.page, contentType: s.content_type } },
-          };
-        }
+        for (const s of ev.sources ?? []) yield sourcePart(s);
+        if (ev.images?.length) yield { type: "data-figures", data: figuresOf(ev.images) };
         // No synthesised stage here: the backend names its own phases now.
         break;
       case "stage":
         yield { type: "data-status", data: { stage: ev.stage }, transient: true };
         break;
       case "eval":
-        yield {
-          type: "data-eval",
-          data: {
-            faithfulness: ev.scores.faithfulness,
-            contextPrecision: ev.scores.context_precision,
-            threshold: ev.scores.threshold,
-            passed: ev.scores.passed,
-            ...(ev.verdict ? { verdict: ev.verdict } : {}),
-            ...(ev.attempt ? { attempt: ev.attempt } : {}),
-          },
-        };
+        yield { type: "data-eval", data: evalData(ev.scores, ev.verdict, ev.attempt) };
         break;
       case "replace": {
         // Close the superseded draft and mark it, so the reader can see the

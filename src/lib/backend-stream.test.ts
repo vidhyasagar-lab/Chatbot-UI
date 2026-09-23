@@ -172,6 +172,40 @@ describe("adaptBackendEvents", () => {
     ]);
   });
 
+  it("passes the figures an answer used through as one data part", async () => {
+    const out = await collect(
+      adaptBackendEvents(
+        events(
+          {
+            ...meta,
+            images: [
+              { path: "uploads/extracted/q3_p4_chart.png", page: 4, source: "uploads/u1/q3.pdf", content_type: "chart" },
+            ],
+          },
+          done,
+        ),
+      ),
+    );
+    expect(out.find((c) => c.type === "data-figures")).toEqual({
+      type: "data-figures",
+      data: [{ path: "uploads/extracted/q3_p4_chart.png", page: 4, source: "q3.pdf", contentType: "chart" }],
+    });
+  });
+
+  it("lists each figure once, though every chunk that cites it repeats it", async () => {
+    // Seen live: two chunks from one page each carried the same chart and table.
+    const chart = { path: "uploads/extracted/q3_p1_chart.png", page: 1, source: "q3.pdf", content_type: "chart" };
+    const table = { path: "uploads/extracted/q3_p1_table.png", page: 1, source: "q3.pdf", content_type: "table" };
+    const out = await collect(adaptBackendEvents(events({ ...meta, images: [chart, table, chart, table] }, done)));
+    const figures = out.find((c) => c.type === "data-figures") as { data: { path: string }[] };
+    expect(figures.data.map((f) => f.path)).toEqual([chart.path, table.path]);
+  });
+
+  it("sends no figures part when the answer used none", async () => {
+    const out = await collect(adaptBackendEvents(events(meta, done)));
+    expect(out.some((c) => c.type === "data-figures")).toBe(false);
+  });
+
   it("ignores unknown event types", async () => {
     const out = await collect(adaptBackendEvents(events(meta, { type: "future-thing" }, done)));
     expect(out.map((c) => c.type)).not.toContain("future-thing");

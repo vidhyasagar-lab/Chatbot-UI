@@ -1,6 +1,8 @@
-import { redirect } from "next/navigation";
+import { Landing } from "@/components/landing/landing";
+import { getCurrentUser } from "@/lib/backend";
 
-// The landing page comes later; until then the app is the front door.
-export default function Home() {
-  redirect("/chat");
+export default async function Home() {
+  // Signed-in visitors get "Open your chats" instead of the sign-up prompts.
+  const user = await getCurrentUser().catch(() => null);
+  return <Landing signedIn={Boolean(user)} />;
 }

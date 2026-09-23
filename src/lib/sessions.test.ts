@@ -71,6 +71,37 @@ describe("toUIMessages", () => {
     ]);
   });
 
+  it("rebuilds what a stored answer was built on", () => {
+    const [, answer] = toUIMessages("s1", [
+      { role: "user", content: "q" },
+      {
+        role: "assistant",
+        content: "Revenue grew [1].",
+        trace_id: "t-1",
+        sources: [{ source: "uploads/u1/q3.pdf", page: 4, chunk_index: 1, content_type: "text" }],
+        images: [{ path: "uploads/extracted/q3_p4_chart.png", page: 4, source: "q3.pdf", content_type: "chart" }],
+        eval: { faithfulness: 0.9, context_precision: 0.8, threshold: 0.5, passed: true, verdict: "passed", attempt: 1 },
+      },
+    ]);
+    expect(answer.parts).toEqual([
+      { type: "data-meta", data: { traceId: "t-1", sessionId: "s1" } },
+      {
+        type: "source-document",
+        sourceId: "1",
+        mediaType: "application/pdf",
+        title: "q3.pdf",
+        filename: "q3.pdf",
+        providerMetadata: { verity: { page: 4, contentType: "text" } },
+      },
+      { type: "data-figures", data: [{ path: "uploads/extracted/q3_p4_chart.png", page: 4, source: "q3.pdf", contentType: "chart" }] },
+      {
+        type: "data-eval",
+        data: { faithfulness: 0.9, contextPrecision: 0.8, threshold: 0.5, passed: true, verdict: "passed", attempt: 1 },
+      },
+      { type: "text", text: "Revenue grew [1]." },
+    ]);
+  });
+
   it("drops roles the chat cannot render", () => {
     const out = toUIMessages("s1", [
       { role: "system", content: "internal" },

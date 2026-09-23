@@ -1,25 +1,42 @@
-import type { VerityMessage } from "./chat-types";
+import { type BackendImage, type BackendScores, type BackendSource, evalData, figuresOf, sourcePart } from "./backend-stream";
+import type { EvalVerdict, VerityMessage } from "./chat-types";
 
 /** One row of GET /chat/sessions (RAG Chatbot app/models/schemas.py ChatSessionInfo). */
 export type SessionSummary = { session_id: string; title: string; created_at: string; updated_at: string };
 
-/** One turn of GET /chat/sessions/{id}. */
-export type StoredMessage = { role: string; content: string };
+/**
+ * One turn of GET /chat/sessions/{id}. Assistant turns stored since the
+ * backend began recording it carry what the answer was built on; older turns
+ * have only role and content.
+ */
+export type StoredMessage = {
+  role: string;
+  content: string;
+  trace_id?: string;
+  sources?: BackendSource[];
+  images?: BackendImage[];
+  eval?: BackendScores & { verdict?: EvalVerdict | null; attempt?: number };
+};
 
 /**
- * Stored turns as chat messages.
- *
- * The backend keeps only the text of each turn, so a restored answer has no
- * sources, trace id or scores: it renders as plain text without source cards,
- * quality badge or feedback buttons. Ids derive from the position so a reload
+ * Stored turns as chat messages, in the same part shapes the live stream
+ * produces, so a reopened answer shows its source cards, figures, quality
+ * badge and feedback buttons. Ids derive from the position so a reload
  * produces the same keys.
  */
 export function toUIMessages(sessionId: string, stored: StoredMessage[]): VerityMessage[] {
-  return stored.flatMap((m, i) =>
-    m.role === "user" || m.role === "assistant"
-      ? [{ id: `${sessionId}-${i}`, role: m.role, parts: [{ type: "text" as const, text: m.content }] }]
-      : [],
-  );
+  return stored.flatMap((m, i): VerityMessage[] => {
+    if (m.role !== "user" && m.role !== "assistant") return [];
+    const parts: VerityMessage["parts"] = [];
+    if (m.role === "assistant") {
+      if (m.trace_id) parts.push({ type: "data-meta", data: { traceId: m.trace_id, sessionId } });
+      for (const s of m.sources ?? []) parts.push(sourcePart(s));
+      if (m.images?.length) parts.push({ type: "data-figures", data: figuresOf(m.images) });
+      if (m.eval) parts.push({ type: "data-eval", data: evalData(m.eval, m.eval.verdict, m.eval.attempt) });
+    }
+    parts.push({ type: "text", text: m.content });
+    return [{ id: `${sessionId}-${i}`, role: m.role, parts }];
+  });
 }
 
 /** The title the backend gives a new chat (RAG Chatbot app/api/routes/chat.py _auto_title). */

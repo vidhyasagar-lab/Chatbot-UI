@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { cache } from "react";
 import { upstreamHeaders } from "./proxy-headers";
 
 /** Server-only access to the FastAPI backend. Never import from a client component. */
@@ -14,11 +15,15 @@ export function backendConfig(): { url: string; key: string } {
 
 export type SessionUser = { user_id: string; username: string; role: "user" | "admin"; created_at: string };
 
-/** The signed-in user for the current request, or null. Used by server components to guard pages. */
-export async function getCurrentUser(): Promise<SessionUser | null> {
+/**
+ * The signed-in user for the current request, or null. Used by server
+ * components to guard pages. cache(): a layout and its page both ask, and each
+ * call would otherwise spend a request of the backend's rate limit.
+ */
+export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
   const { url, key } = backendConfig();
   const jar = await cookies();
   const headers = upstreamHeaders(new Headers({ cookie: jar.toString() }), key);
   const res = await fetch(`${url}/api/v1/auth/me`, { headers, cache: "no-store" });
   return res.ok ? ((await res.json()) as SessionUser) : null;
-}
+});

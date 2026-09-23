@@ -1,7 +1,7 @@
 "use client";
 
-import { Trash } from "@phosphor-icons/react";
-import { useMemo, useState } from "react";
+import { PencilSimple, Trash } from "@phosphor-icons/react";
+import { useMemo, useRef, useState } from "react";
 import { groupSessions } from "@/lib/sessions";
 import { cn } from "@/lib/utils";
 import type { SessionsState } from "./use-sessions";
@@ -45,6 +45,7 @@ export function HistoryList({ state, activeId, onOpen, onDeleted }: Props) {
                   // Only leave the open chat once it is really gone.
                   if (await state.remove(s.session_id)) onDeleted(s.session_id);
                 }}
+                onRename={(t) => state.rename(s.session_id, t)}
               />
             ))}
           </ul>
@@ -59,13 +60,48 @@ function HistoryItem({
   active,
   onOpen,
   onDelete,
+  onRename,
 }: {
   title: string;
   active: boolean;
   onOpen: () => void;
   onDelete: () => void;
+  onRename: (title: string) => void;
 }) {
   const [confirming, setConfirming] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const ended = useRef(false);
+  const startEditing = () => {
+    ended.current = false;
+    setEditing(true);
+  };
+
+  if (editing) {
+    // Enter and Escape unmount the input, which then blurs: only the first ending counts.
+    const finish = (save: boolean, value: string) => {
+      if (ended.current) return;
+      ended.current = true;
+      setEditing(false);
+      if (save) onRename(value);
+    };
+    return (
+      <li>
+        <input
+          autoFocus
+          defaultValue={title}
+          maxLength={200}
+          aria-label="Chat name"
+          onFocus={(e) => e.currentTarget.select()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") finish(true, e.currentTarget.value);
+            if (e.key === "Escape") finish(false, "");
+          }}
+          onBlur={(e) => finish(true, e.currentTarget.value)}
+          className="block w-full rounded-lg border border-brand bg-core px-3 py-1 text-[13.5px] outline-none shadow-[0_0_0_3px_var(--brand-soft)]"
+        />
+      </li>
+    );
+  }
 
   if (confirming) {
     return (
@@ -98,21 +134,33 @@ function HistoryItem({
         aria-current={active ? "page" : undefined}
         title={title}
         className={cn(
-          "block w-full truncate rounded-lg py-1.5 pl-3 pr-9 text-left text-[13.5px] transition-colors",
+          "block w-full truncate rounded-lg py-1.5 pl-3 pr-3 text-left text-[13.5px] transition-[color,background-color,padding] group-focus-within:pr-16 group-hover:pr-16",
           active ? "bg-core font-medium text-foreground shadow-[0_0_0_1px_var(--hair)]" : "text-muted-foreground hover:bg-shell hover:text-foreground",
         )}
       >
         {title || "Untitled chat"}
       </button>
-      <button
-        type="button"
-        onClick={() => setConfirming(true)}
-        aria-label={`Delete chat: ${title}`}
-        title="Delete chat"
-        className="absolute right-1 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-faint opacity-0 transition-[opacity,color] hover:text-err focus-visible:opacity-100 group-hover:opacity-100"
-      >
-        <Trash weight="regular" className="size-3.5" />
-      </button>
+      {/* Hidden until hover or keyboard focus; always reachable by Tab. */}
+      <span className="absolute right-1 top-1/2 flex -translate-y-1/2 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 max-md:opacity-100">
+        <button
+          type="button"
+          onClick={startEditing}
+          aria-label={`Rename chat: ${title}`}
+          title="Rename chat"
+          className="grid size-7 place-items-center rounded-md text-faint transition-colors hover:text-foreground"
+        >
+          <PencilSimple weight="regular" className="size-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => setConfirming(true)}
+          aria-label={`Delete chat: ${title}`}
+          title="Delete chat"
+          className="grid size-7 place-items-center rounded-md text-faint transition-colors hover:text-err"
+        >
+          <Trash weight="regular" className="size-3.5" />
+        </button>
+      </span>
     </li>
   );
 }

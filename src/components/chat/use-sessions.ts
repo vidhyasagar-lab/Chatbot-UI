@@ -78,7 +78,36 @@ export function useSessions() {
     [sessions],
   );
 
-  return { sessions, error, refresh, touch, remove };
+  /** Rename a chat. The new title shows at once and reverts if the backend refuses it. */
+  const rename = useCallback(
+    async (sessionId: string, title: string): Promise<boolean> => {
+      const next = title.trim().slice(0, 200); // the backend's limit
+      const before = sessions?.find((s) => s.session_id === sessionId)?.title;
+      if (!next || next === before) return true;
+      setError(null);
+      const setTitle = (t: string) =>
+        setSessions((list) => list?.map((s) => (s.session_id === sessionId ? { ...s, title: t } : s)) ?? null);
+      setTitle(next);
+      let status = 0;
+      try {
+        const res = await fetch(`/api/v1/chat/sessions/${encodeURIComponent(sessionId)}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ title: next }),
+        });
+        if (res.ok) return true;
+        status = res.status;
+      } catch {
+        // network failure: status stays 0
+      }
+      if (before !== undefined) setTitle(before);
+      setError(status === 429 ? "Too many requests right now. Wait a few seconds, then rename again." : "Couldn't rename that chat.");
+      return false;
+    },
+    [sessions],
+  );
+
+  return { sessions, error, refresh, touch, remove, rename };
 }
 
 export type SessionsState = ReturnType<typeof useSessions>;

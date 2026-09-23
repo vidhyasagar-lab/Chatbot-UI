@@ -8,6 +8,7 @@ import { Mark } from "@/components/brand";
 import type { ChatStage, VerityMessage } from "@/lib/chat-types";
 import { linkCitations } from "@/lib/citations";
 import { cn } from "@/lib/utils";
+import { FigureStrip } from "./figure-strip";
 import { QualityBadge } from "./quality-badge";
 import { flashSource, SourceChips } from "./source-chips";
 
@@ -81,7 +82,9 @@ export function AssistantMessage({ message, streaming, stage, stopped, onRetry }
   const rejected = rejectedDraftOf(message);
   const sources = message.parts.filter((p): p is SourceDocumentUIPart => p.type === "source-document");
   const meta = message.parts.find((p) => p.type === "data-meta")?.data;
-  const gated = message.parts.find((p) => p.type === "data-eval")?.data;
+  // The last verdict: after a rejection it is the replacement's, not the draft's.
+  const gated = message.parts.findLast((p) => p.type === "data-eval")?.data;
+  const figures = message.parts.find((p) => p.type === "data-figures")?.data ?? [];
 
   const idKey = sources.map((s) => s.sourceId).join(",");
   const ids = useMemo(() => new Set(idKey ? idKey.split(",") : []), [idKey]);
@@ -114,6 +117,7 @@ export function AssistantMessage({ message, streaming, stage, stopped, onRetry }
           {!streaming && (
             <div className="animate-rise flex flex-col gap-3">
               {stopped && <p className="text-[12.5px] text-faint">Stopped. This partial answer wasn&apos;t verified.</p>}
+              {!stopped && <FigureStrip figures={figures} />}
               <SourceChips sources={sources} />
               <div className="flex flex-wrap items-center gap-1">
                 {!stopped && text && (

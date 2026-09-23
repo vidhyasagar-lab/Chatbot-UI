@@ -40,9 +40,9 @@ async function errorFrom(res: Response): Promise<string> {
   return "Something went wrong. Try again.";
 }
 
-export function AuthForm() {
+export function AuthForm({ initialMode = "login" }: { initialMode?: Mode }) {
   const router = useRouter();
-  const [mode, setMode] = useState<Mode>("login");
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const copy = COPY[mode];

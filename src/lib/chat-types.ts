@@ -25,7 +25,11 @@ export type EvalScores = {
   attempt?: number;
 };
 
+/** A chart, table, diagram or image an answer drew on. `path` is the backend's, served by /documents/figure. */
+export type Figure = { path: string; page: string | number; source: string; contentType: string };
+
 export type VerityDataTypes = {
+  figures: Figure[];
   /** Transient: never stored on the message, only delivered to onData. */
   status: { stage: ChatStage };
   meta: { traceId: string; sessionId: string };

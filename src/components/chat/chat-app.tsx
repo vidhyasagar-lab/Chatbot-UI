@@ -1,8 +1,21 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { Files, FlowArrow, Paperclip, Plus, SealCheck, SignOut, Sparkle, UploadSimple, WarningCircle } from "@phosphor-icons/react";
+import {
+  Files,
+  FlowArrow,
+  List,
+  Paperclip,
+  Plus,
+  SealCheck,
+  ShieldCheck,
+  SignOut,
+  Sparkle,
+  UploadSimple,
+  WarningCircle,
+} from "@phosphor-icons/react";
 import { DefaultChatTransport } from "ai";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Conversation, ConversationContent, ConversationScrollButton } from "@/components/ai-elements/conversation";
@@ -24,6 +37,7 @@ import type { SessionUser } from "@/lib/backend";
 import { SESSION_EXPIRED } from "@/lib/chat-errors";
 import type { ChatStage, VerityMessage } from "@/lib/chat-types";
 import { autoTitle } from "@/lib/sessions";
+import { cn } from "@/lib/utils";
 import { AssistantMessage, textOf } from "./assistant-message";
 import { HistoryList } from "./history-list";
 import { loadSession, useSessions } from "./use-sessions";
@@ -64,6 +78,10 @@ export function ChatApp({ user, initialSessionId = "" }: { user: SessionUser; in
   const documents = useDocuments();
   const [docsOpen, setDocsOpen] = useState(false);
   const closeDocs = useCallback(() => setDocsOpen(false), []);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
+  const menu = useRef<HTMLElement>(null);
+  const menuButton = useRef<HTMLButtonElement>(null);
   const docCount = documents.docs?.length ?? 0;
 
   // The session id rides along per request (see ask/retry), so the transport is static.
@@ -212,6 +230,19 @@ export function ChatApp({ user, initialSessionId = "" }: { user: SessionUser; in
     return () => document.removeEventListener("keydown", onKey);
   }, [busy, stopNow, newChat]);
 
+  // Phone menu: focus moves in when it opens, Escape closes it, and focus returns to the button.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const button = menuButton.current;
+    menu.current?.querySelector<HTMLElement>("button, a")?.focus();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMenuOpen(false);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      button?.focus();
+    };
+  }, [menuOpen]);
+
   const signOut = async () => {
     await fetch("/api/v1/auth/logout", { method: "POST" }).catch(() => undefined);
     router.replace("/login");
@@ -220,30 +251,57 @@ export function ChatApp({ user, initialSessionId = "" }: { user: SessionUser; in
 
   const lastId = messages.at(-1)?.id;
 
-  return (
-    <div className="fixed inset-0 grid grid-cols-[272px_1fr] bg-background max-md:grid-cols-1">
-      <aside className="flex min-h-0 flex-col gap-4 border-r border-hair bg-rail px-3 py-4 max-md:hidden">
-        <div className="flex items-center justify-between px-2">
-          <Wordmark className="text-[15px]" />
-          <ThemeToggle />
-        </div>
+  /**
+   * One sidebar, rendered twice: fixed on desktop, and as a slide-out menu on
+   * phones. `close` dismisses the menu after anything that navigates.
+   */
+  const renderSidebar = (close: () => void) => (
+    <>
+      <div className="flex items-center justify-between px-2">
+        <Wordmark className="text-[15px]" />
+        <ThemeToggle />
+      </div>
+      <button
+        type="button"
+        onClick={() => {
+          newChat();
+          close();
+        }}
+        className="flex items-center justify-between rounded-xl border border-hair-strong bg-core px-3.5 py-2.5 text-[13.5px] font-medium transition-[border-color,transform] duration-300 ease-spring hover:border-faint active:scale-[0.985]"
+      >
+        <span className="inline-flex items-center gap-2">
+          <Plus weight="regular" className="size-4" />
+          New chat
+        </span>
+        <kbd className="font-mono text-[10.5px] text-faint max-md:hidden">Ctrl K</kbd>
+      </button>
+      <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1 pt-1">
+        <HistoryList
+          state={history}
+          activeId={activeId}
+          onOpen={(id) => {
+            openSession(id);
+            close();
+          }}
+          onDeleted={onChatDeleted}
+        />
+      </div>
+      <div className="flex flex-col gap-0.5">
+        {user.role === "admin" && (
+          <Link
+            href="/admin"
+            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] text-muted-foreground transition-colors hover:bg-shell hover:text-foreground"
+          >
+            <ShieldCheck weight="regular" className="size-[18px]" />
+            Admin
+          </Link>
+        )}
         <button
           type="button"
-          onClick={newChat}
-          className="flex items-center justify-between rounded-xl border border-hair-strong bg-core px-3.5 py-2.5 text-[13.5px] font-medium transition-[border-color,transform] duration-300 ease-spring hover:border-faint active:scale-[0.985]"
-        >
-          <span className="inline-flex items-center gap-2">
-            <Plus weight="regular" className="size-4" />
-            New chat
-          </span>
-          <kbd className="font-mono text-[10.5px] text-faint">Ctrl K</kbd>
-        </button>
-        <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1 pt-1">
-          <HistoryList state={history} activeId={activeId} onOpen={openSession} onDeleted={onChatDeleted} />
-        </div>
-        <button
-          type="button"
-          onClick={() => setDocsOpen(true)}
+          onClick={() => {
+            close();
+            setDocsOpen(true);
+          }}
           className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] text-muted-foreground transition-colors hover:bg-shell hover:text-foreground"
         >
           <Files weight="regular" className="size-[18px]" />
@@ -252,28 +310,69 @@ export function ChatApp({ user, initialSessionId = "" }: { user: SessionUser; in
             {documents.docs === null ? "…" : docCount}
           </span>
         </button>
-        <div className="flex items-center gap-2.5 border-t border-hair px-2 pt-3 text-[13px]">
-          <span className="grid size-7 place-items-center rounded-full bg-mark font-serif text-[13px] font-medium uppercase text-mark-ink">
-            {user.username.slice(0, 2)}
-          </span>
-          <span className="flex min-w-0 flex-col leading-tight">
-            <span className="truncate">{user.username}</span>
-            <small className="text-[11.5px] capitalize text-faint">{user.role}</small>
-          </span>
-          <button
-            type="button"
-            onClick={signOut}
-            aria-label="Sign out"
-            title="Sign out"
-            className="ml-auto grid size-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-shell hover:text-foreground"
-          >
-            <SignOut weight="regular" className="size-[18px]" />
-          </button>
-        </div>
+      </div>
+      <div className="flex items-center gap-2.5 border-t border-hair px-2 pt-3 text-[13px]">
+        <span className="grid size-7 place-items-center rounded-full bg-mark font-serif text-[13px] font-medium uppercase text-mark-ink">
+          {user.username.slice(0, 2)}
+        </span>
+        <span className="flex min-w-0 flex-col leading-tight">
+          <span className="truncate">{user.username}</span>
+          <small className="text-[11.5px] capitalize text-faint">{user.role}</small>
+        </span>
+        <button
+          type="button"
+          onClick={signOut}
+          aria-label="Sign out"
+          title="Sign out"
+          className="ml-auto grid size-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-shell hover:text-foreground"
+        >
+          <SignOut weight="regular" className="size-[18px]" />
+        </button>
+      </div>
+    </>
+  );
+
+  return (
+    <div className="fixed inset-0 grid grid-cols-[272px_1fr] bg-background max-md:grid-cols-1">
+      <aside className="flex min-h-0 flex-col gap-4 border-r border-hair bg-rail px-3 py-4 max-md:hidden">
+        {renderSidebar(() => undefined)}
+      </aside>
+
+      {/* Phones: the same sidebar as a slide-out menu. */}
+      <div
+        aria-hidden
+        onClick={closeMenu}
+        className={cn(
+          "fixed inset-0 z-30 bg-[rgb(28_27_24/0.4)] transition-opacity duration-500 ease-spring md:hidden",
+          menuOpen ? "opacity-100" : "pointer-events-none opacity-0",
+        )}
+      />
+      <aside
+        ref={menu}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Chats and menu"
+        inert={!menuOpen}
+        className={cn(
+          "fixed inset-y-0 left-0 z-40 flex w-[min(300px,85vw)] flex-col gap-4 border-r border-hair bg-rail px-3 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4 shadow-[var(--paper-shadow)] transition-transform duration-500 ease-spring md:hidden",
+          menuOpen ? "translate-x-0" : "-translate-x-full",
+        )}
+      >
+        {renderSidebar(closeMenu)}
       </aside>
 
       <main className="relative flex min-h-0 min-w-0 flex-col">
-        <header className="flex h-14 shrink-0 items-center gap-2 px-4">
+        <header className="flex h-14 shrink-0 items-center gap-2 px-4 max-md:px-2">
+          <button
+            ref={menuButton}
+            type="button"
+            onClick={() => setMenuOpen(true)}
+            aria-label="Open chats and menu"
+            aria-expanded={menuOpen}
+            className="grid size-10 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-shell hover:text-foreground md:hidden"
+          >
+            <List weight="regular" className="size-5" />
+          </button>
           <Wordmark className="text-[15px] md:hidden" />
           <span className="flex-1" />
           <button
