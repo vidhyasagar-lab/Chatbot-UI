@@ -1,0 +1,223 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* Streamdown ships its own class names; let Tailwind see them. */
+@source "../../node_modules/streamdown/dist/*.js";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: var(--font-instrument-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-newsreader), ui-serif, Georgia, serif;
+  --font-heading: var(--font-newsreader), ui-serif, Georgia, serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Verity */
+  --color-shell: var(--shell);
+  --color-hair: var(--hair);
+  --color-hair-strong: var(--hair-strong);
+  --color-core: var(--core);
+  --color-core-2: var(--core-2);
+  --color-faint: var(--faint);
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-ink: var(--brand-ink);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-err: var(--err);
+  --color-err-soft: var(--err-soft);
+  --color-glass: var(--glass);
+  --color-rail: var(--rail);
+  --color-mark: var(--mark);
+  --color-mark-ink: var(--mark-ink);
+
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/*
+ * Paper and ink (default). A document tool should feel like a reading desk,
+ * not a terminal: warm paper, near-black ink, one deep green for "verified",
+ * and highlighter yellow for the passages an answer leans on.
+ */
+:root {
+  --radius: 0.75rem;
+  --background: #f7f5f0;
+  --foreground: #1c1b18;
+  --card: #fffefb;
+  --card-foreground: #1c1b18;
+  --popover: #fffefb;
+  --popover-foreground: #1c1b18;
+  --primary: #1c1b18;
+  --primary-foreground: #f7f5f0;
+  --secondary: #efece4;
+  --secondary-foreground: #1c1b18;
+  --muted: #efece4;
+  --muted-foreground: #5f5b52;
+  --accent: rgb(60 50 30 / 0.05);
+  --accent-foreground: #1c1b18;
+  --destructive: #b4432f;
+  --border: #e6e1d6;
+  --input: #ddd7ca;
+  --ring: #1f5c45;
+
+  --rail: #f0ede5;
+  --shell: rgb(60 50 30 / 0.045);
+  --hair: #e6e1d6;
+  --hair-strong: #d8d1c2;
+  --core: #fffefb;
+  --core-2: #f3f0e8;
+  --faint: #938e83;
+  --brand: #1f5c45;
+  --brand-ink: #fffefb;
+  --brand-soft: rgb(31 92 69 / 0.08);
+  --mark: #fbe8a6;
+  --mark-ink: #5c4608;
+  --ok: #2c7a4f;
+  --ok-soft: rgb(44 122 79 / 0.09);
+  --warn: #a8660f;
+  --warn-soft: rgb(168 102 15 / 0.09);
+  --err: #b4432f;
+  --err-soft: rgb(180 67 47 / 0.08);
+  --glass: rgb(255 254 251 / 0.85);
+  --paper-shadow: 0 1px 2px rgb(60 50 30 / 0.04), 0 12px 32px -18px rgb(60 50 30 / 0.22);
+  color-scheme: light;
+}
+
+/* Lamp-lit dark: warm charcoal rather than black, so the paper metaphor survives. */
+.dark {
+  --background: #181715;
+  --foreground: #ece8df;
+  --card: #211f1c;
+  --card-foreground: #ece8df;
+  --popover: #24221f;
+  --popover-foreground: #ece8df;
+  --primary: #ece8df;
+  --primary-foreground: #181715;
+  --secondary: #26241f;
+  --secondary-foreground: #ece8df;
+  --muted: #26241f;
+  --muted-foreground: #aba59a;
+  --accent: rgb(255 250 235 / 0.05);
+  --accent-foreground: #ece8df;
+  --destructive: #e58a76;
+  --border: #302d28;
+  --input: #3a362f;
+  --ring: #86c7a6;
+
+  --rail: #1c1b18;
+  --shell: rgb(255 250 235 / 0.045);
+  --hair: #302d28;
+  --hair-strong: #3d3932;
+  --core: #211f1c;
+  --core-2: #282622;
+  --faint: #7c776d;
+  --brand: #86c7a6;
+  --brand-ink: #10231a;
+  --brand-soft: rgb(134 199 166 / 0.12);
+  --mark: rgb(240 200 90 / 0.2);
+  --mark-ink: #f1d68c;
+  --ok: #86c7a6;
+  --ok-soft: rgb(134 199 166 / 0.12);
+  --warn: #e3b35c;
+  --warn-soft: rgb(227 179 92 / 0.12);
+  --err: #e58a76;
+  --err-soft: rgb(229 138 118 / 0.12);
+  --glass: rgb(33 31 28 / 0.88);
+  --paper-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 16px 40px -20px rgb(0 0 0 / 0.6);
+  color-scheme: dark;
+}
+
+/* A sheet of paper: one hairline edge and a soft contact shadow. */
+@utility paper {
+  background: var(--core);
+  border: 1px solid var(--hair);
+  box-shadow: var(--paper-shadow);
+}
+@utility hairline {
+  box-shadow: 0 0 0 1px var(--hair);
+}
+
+/*
+ * The composer is the paper sheet; the input group inside it must not draw a
+ * second border or a focus ring. Its own focus classes use has-[] variants that
+ * outrank utility overrides, hence a plain rule here.
+ */
+.composer [data-slot="input-group"] {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  --tw-ring-shadow: 0 0 #0000;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-background text-foreground;
+    transition: background-color 0.6s var(--ease-spring), color 0.6s var(--ease-spring);
+  }
+  ::selection {
+    background: var(--mark);
+    color: var(--mark-ink);
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+.animate-rise {
+  animation: rise 0.5s var(--ease-spring) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
