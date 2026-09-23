@@ -23,7 +23,19 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import type { SessionUser } from "@/lib/backend";
 import { SESSION_EXPIRED } from "@/lib/chat-errors";
 import type { ChatStage, VerityMessage } from "@/lib/chat-types";
+import { autoTitle } from "@/lib/sessions";
 import { AssistantMessage, textOf } from "./assistant-message";
+import { HistoryList } from "./history-list";
+import { loadSession, useSessions } from "./use-sessions";
+
+/**
+ * The open chat lives in the URL (?s=<id>) so a refresh can restore it.
+ * replaceState rather than router.replace: the server page must not re-render
+ * mid-answer, and one chat should not add a history entry per question.
+ */
+function setUrlSession(sessionId: string) {
+  window.history.replaceState(null, "", sessionId ? `/chat?s=${encodeURIComponent(sessionId)}` : "/chat");
+}
 
 const SUGGESTIONS = [
   { icon: Sparkle, text: "Summarize my documents", hint: "Key points, with sources" },
@@ -32,12 +44,22 @@ const SUGGESTIONS = [
   { icon: WarningCircle, text: "What risks or open questions are mentioned?", hint: "Everything flagged, in one place" },
 ];
 
-export function ChatApp({ user }: { user: SessionUser }) {
+export function ChatApp({ user, initialSessionId = "" }: { user: SessionUser; initialSessionId?: string }) {
   const router = useRouter();
   const [stage, setStage] = useState<ChatStage | null>(null);
   const [stoppedIds, setStoppedIds] = useState<Set<string>>(() => new Set());
   const [announcement, setAnnouncement] = useState("");
-  const sessionId = useRef("");
+  // The ref is what requests read; the state is what the sidebar highlights.
+  const sessionId = useRef(initialSessionId);
+  const [activeId, setActiveId] = useState(initialSessionId);
+  const [openingChat, setOpeningChat] = useState(Boolean(initialSessionId));
+  const [notice, setNotice] = useState<string | null>(null);
+  // Guards against a slow load landing after the user has moved to another chat.
+  const opening = useRef(initialSessionId);
+  const history = useSessions();
+  const touchHistory = history.touch;
+  // The question in flight, so a new chat can be listed under the title the backend gives it.
+  const lastQuestion = useRef("");
   const composer = useRef<HTMLDivElement>(null);
   const documents = useDocuments();
   const [docsOpen, setDocsOpen] = useState(false);
@@ -52,10 +74,18 @@ export function ChatApp({ user }: { user: SessionUser }) {
     throttle: 50, // batch token renders instead of re-rendering per token
     onData: (part) => {
       if (part.type === "data-status") setStage(part.data.stage);
-      if (part.type === "data-meta" && part.data.sessionId) sessionId.current = part.data.sessionId;
+      if (part.type === "data-meta" && part.data.sessionId && part.data.sessionId !== sessionId.current) {
+        // The backend just created this chat: remember it and list it.
+        sessionId.current = part.data.sessionId;
+        opening.current = part.data.sessionId;
+        setActiveId(part.data.sessionId);
+        setUrlSession(part.data.sessionId);
+        touchHistory(part.data.sessionId, autoTitle(lastQuestion.current));
+      }
     },
     onFinish: ({ message }) => {
       setStage(null);
+      if (sessionId.current) touchHistory(sessionId.current, autoTitle(lastQuestion.current)); // to the top
       const text = textOf(message);
       // One announcement for the finished answer, never per token.
       if (text) setAnnouncement(`Answer ready. ${text}`);
@@ -76,8 +106,10 @@ export function ChatApp({ user }: { user: SessionUser }) {
       if (!q) throw new Error("empty");
       if (busy) throw new Error("busy");
       clearError();
+      setNotice(null);
       setAnnouncement("");
       setStage("retrieving");
+      lastQuestion.current = q;
       sendMessage({ text: q }, { body: { sessionId: sessionId.current } });
       focusInput();
     },
@@ -107,11 +139,66 @@ export function ChatApp({ user }: { user: SessionUser }) {
   const newChat = useCallback(() => {
     if (busy) stop();
     sessionId.current = "";
+    opening.current = "";
+    setActiveId("");
+    setUrlSession("");
+    setOpeningChat(false);
+    setNotice(null);
     setMessages([]);
     setStoppedIds(new Set());
     clearError();
     focusInput();
   }, [busy, stop, setMessages, clearError, focusInput]);
+
+  /** Put a loaded chat on screen, unless the user has already moved to another one. */
+  const applyLoaded = useCallback(
+    (id: string, loaded: VerityMessage[] | null) => {
+      if (opening.current !== id) return;
+      setOpeningChat(false);
+      if (loaded) {
+        setMessages(loaded);
+        return;
+      }
+      sessionId.current = "";
+      opening.current = "";
+      setActiveId("");
+      setUrlSession("");
+      setMessages([]);
+      setNotice("That chat couldn't be opened. It may have been deleted.");
+    },
+    [setMessages],
+  );
+
+  // Restore the chat named in the URL after a refresh.
+  useEffect(() => {
+    if (!initialSessionId) return;
+    loadSession(initialSessionId).then((loaded) => applyLoaded(initialSessionId, loaded));
+  }, [initialSessionId, applyLoaded]);
+
+  const openSession = useCallback(
+    (id: string) => {
+      if (id === sessionId.current) return focusInput();
+      // Stopping is safe: the backend saves an answer even when the stream is cut.
+      if (busy) stop();
+      clearError();
+      setNotice(null);
+      setStage(null);
+      setStoppedIds(new Set());
+      sessionId.current = id;
+      opening.current = id;
+      setActiveId(id);
+      setUrlSession(id);
+      setMessages([]);
+      setOpeningChat(true);
+      loadSession(id).then((loaded) => {
+        applyLoaded(id, loaded);
+        focusInput();
+      });
+    },
+    [busy, stop, clearError, setMessages, applyLoaded, focusInput],
+  );
+
+  const onChatDeleted = useCallback((id: string) => id === sessionId.current && newChat(), [newChat]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -151,7 +238,9 @@ export function ChatApp({ user }: { user: SessionUser }) {
           </span>
           <kbd className="font-mono text-[10.5px] text-faint">Ctrl K</kbd>
         </button>
-        <div className="flex-1" />
+        <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1 pt-1">
+          <HistoryList state={history} activeId={activeId} onOpen={openSession} onDeleted={onChatDeleted} />
+        </div>
         <button
           type="button"
           onClick={() => setDocsOpen(true)}
@@ -203,7 +292,18 @@ export function ChatApp({ user }: { user: SessionUser }) {
         </header>
         <Conversation className="min-h-0">
           <ConversationContent className="mx-auto w-full max-w-[760px] gap-9 px-6 pb-56 pt-8 max-md:px-4">
-            {messages.length === 0 ? (
+            {notice && (
+              <p role="alert" className="animate-rise flex items-center gap-3 rounded-xl bg-warn-soft px-4 py-3 text-[13.5px]">
+                <WarningCircle weight="regular" className="size-5 shrink-0 text-warn" />
+                {notice}
+              </p>
+            )}
+            {messages.length === 0 && openingChat ? (
+              <p role="status" className="flex min-h-[calc(100dvh-22rem)] items-center justify-center gap-2.5 text-[13.5px] text-muted-foreground">
+                <span className="size-2 animate-pulse rounded-full bg-brand" />
+                Opening chat…
+              </p>
+            ) : messages.length === 0 ? (
               <EmptyState
                 onPick={(t) => ask(t)}
                 noDocuments={documents.docs !== null && docCount === 0 && !documents.busy}

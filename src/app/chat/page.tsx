@@ -5,8 +5,11 @@ import { getCurrentUser } from "@/lib/backend";
 
 export const metadata: Metadata = { title: "Chat · Verity" };
 
-export default async function ChatPage() {
+export default async function ChatPage({ searchParams }: { searchParams: Promise<{ s?: string | string[] }> }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  return <ChatApp user={user} />;
+  // ?s=<session id> is how the open chat survives a refresh.
+  const { s } = await searchParams;
+  const sessionId = typeof s === "string" ? s : "";
+  return <ChatApp user={user} initialSessionId={sessionId} />;
 }
