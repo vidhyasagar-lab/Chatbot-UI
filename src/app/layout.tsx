@@ -13,13 +13,13 @@ export const metadata: Metadata = {
   description: "Answers from your documents, cited and checked before you see them.",
 };
 
-// Runs before paint so a dark-mode visitor never sees a light flash.
-const themeScript = `try{if(localStorage.getItem("verity-theme")==="dark")document.documentElement.classList.add("dark")}catch(e){}`;
+// Dark is the default. Runs before paint so a light-mode visitor never sees a dark flash.
+const themeScript = `try{if(localStorage.getItem("verity-theme")==="light")document.documentElement.classList.remove("dark")}catch(e){}`;
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     // Font variables live on <html> because the font-sans rule is applied there.
-    <html lang="en" className={`${sans.variable} ${serif.variable} ${mono.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`dark ${sans.variable} ${serif.variable} ${mono.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>

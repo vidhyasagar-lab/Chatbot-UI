@@ -66,7 +66,7 @@
 }
 
 /*
- * Paper and ink (default). A document tool should feel like a reading desk,
+ * Paper and ink (light). A document tool should feel like a reading desk,
  * not a terminal: warm paper, near-black ink, one deep green for "verified",
  * and highlighter yellow for the passages an answer leans on.
  */
@@ -114,7 +114,7 @@
   color-scheme: light;
 }
 
-/* Lamp-lit dark: warm charcoal rather than black, so the paper metaphor survives. */
+/* Lamp-lit dark (default): warm charcoal rather than black, so the paper metaphor survives. */
 .dark {
   --background: #181715;
   --foreground: #ece8df;
