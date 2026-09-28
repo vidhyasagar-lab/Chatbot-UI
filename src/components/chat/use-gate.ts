@@ -3,9 +3,11 @@
 import { useEffect, useState } from "react";
 import type { GateResult } from "@/lib/gate";
 
-// The gate takes ~25-40s, and a rewrite adds a few more. Backoff, not a fixed
-// interval: the backend rate limit is per user and shared with chat itself.
-const POLL_DELAYS_MS = [4000, 6000, 8000, 10000, 12000, 15000, 20000, 30000, 30000];
+// The gate takes ~25-40s. A rejection adds the rewrite and a check of it, and
+// at worst the draft's check runs its full 120s timeout and the rewrite's its
+// 45s, so the window covers ~3 minutes. Backoff, not a fixed interval: the
+// backend rate limit is per user and shared with chat itself.
+export const GATE_POLL_DELAYS_MS = [4000, 6000, 8000, 10000, 12000, 15000, 20000, 30000, 30000, 30000, 30000];
 
 /** Poll the quality gate's verdict for an answer until it arrives or we give up. */
 export function useGateResult(traceId: string | undefined, pending: boolean) {
@@ -31,10 +33,10 @@ export function useGateResult(traceId: string | undefined, pending: boolean) {
       } catch {
         if (ctrl.signal.aborted) return;
       }
-      if (attempt >= POLL_DELAYS_MS.length) setGaveUp(true);
-      else timer = window.setTimeout(poll, POLL_DELAYS_MS[attempt++]);
+      if (attempt >= GATE_POLL_DELAYS_MS.length) setGaveUp(true);
+      else timer = window.setTimeout(poll, GATE_POLL_DELAYS_MS[attempt++]);
     };
-    timer = window.setTimeout(poll, POLL_DELAYS_MS[attempt++]);
+    timer = window.setTimeout(poll, GATE_POLL_DELAYS_MS[attempt++]);
     return () => {
       ctrl.abort();
       window.clearTimeout(timer);
