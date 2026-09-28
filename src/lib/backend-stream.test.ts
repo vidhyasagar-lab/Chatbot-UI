@@ -351,6 +351,22 @@ describe("adaptBackendEvents — a gate that runs after the tokens", () => {
     expect(stages).toEqual(["retrieving", "searching"]);
   });
 
+  it("marks an answer whose quality gate is still running", async () => {
+    const out = await collect(
+      adaptBackendEvents(events(meta, draft, { type: "done", final_attempt: 1, gate: "pending" })),
+    );
+    const at = out.findIndex((c) => c.type === "data-gate");
+
+    expect(at).toBeGreaterThan(-1);
+    expect(out[at]).toMatchObject({ data: { pending: true } });
+    expect(out.at(-1)).toMatchObject({ type: "finish" });
+  });
+
+  it("adds no gate marker when the gate is off", async () => {
+    const out = await collect(adaptBackendEvents(events(meta, draft, done)));
+    expect(out.some((c) => c.type === "data-gate")).toBe(false);
+  });
+
   it("treats a token with no attempt as attempt 1", async () => {
     const out = await collect(
       adaptBackendEvents(events(meta, { type: "token", content: "Hi" }, done)),

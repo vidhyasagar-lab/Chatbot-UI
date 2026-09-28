@@ -7,11 +7,13 @@ import { Message, MessageContent, MessageResponse } from "@/components/ai-elemen
 import { Mark } from "@/components/brand";
 import type { ChatStage, VerityMessage } from "@/lib/chat-types";
 import { linkCitations } from "@/lib/citations";
+import { gateView } from "@/lib/gate";
 import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { FigureStrip } from "./figure-strip";
 import { QualityBadge } from "./quality-badge";
 import { flashSource, SourceChips } from "./source-chips";
+import { useGateResult } from "./use-gate";
 
 const STAGE_COPY: Record<ChatStage, string> = {
   retrieving: "Searching your documents",
@@ -86,13 +88,20 @@ type Props = {
 };
 
 export function AssistantMessage({ message, streaming, stage, stopped, canRetry, onRetry }: Props) {
-  const text = textOf(message);
-  const rejected = rejectedDraftOf(message);
   const sources = message.parts.filter((p): p is SourceDocumentUIPart => p.type === "source-document");
   const meta = message.parts.find((p) => p.type === "data-meta")?.data;
-  // The last verdict: after a rejection it is the replacement's, not the draft's.
-  const gated = message.parts.findLast((p) => p.type === "data-eval")?.data;
   const figures = message.parts.find((p) => p.type === "data-figures")?.data ?? [];
+
+  // The gate runs after the stream, so its verdict - and a revised answer, if
+  // it rejected this one - arrives by polling rather than in the stream.
+  const gatePending = message.parts.some((p) => p.type === "data-gate");
+  const gate = useGateResult(meta?.traceId, gatePending && !streaming && !stopped);
+  const view = gateView(textOf(message), gate.result);
+  const text = view.text;
+  const rejected = rejectedDraftOf(message) ?? view.rejected;
+  // The last in-stream verdict (older backends), else the polled one.
+  const gated = message.parts.findLast((p) => p.type === "data-eval")?.data ?? view.scores ?? undefined;
+  const checking = gatePending && !gate.result && !gate.gaveUp;
 
   const idKey = sources.map((s) => s.sourceId).join(",");
   const ids = useMemo(() => new Set(idKey ? idKey.split(",") : []), [idKey]);
@@ -130,7 +139,12 @@ export function AssistantMessage({ message, streaming, stage, stopped, canRetry,
               <div className="flex flex-wrap items-center gap-1">
                 {!stopped && text && (
                   <span className="mr-2">
-                    <QualityBadge gated={gated} traceId={meta?.traceId} />
+                    <QualityBadge
+                      key={gated ? "scored" : checking ? "checking" : "polling"}
+                      gated={gated}
+                      traceId={meta?.traceId}
+                      checking={checking}
+                    />
                   </span>
                 )}
                 <Actions text={text} traceId={meta?.traceId} onRetry={canRetry ? onRetry : undefined} />

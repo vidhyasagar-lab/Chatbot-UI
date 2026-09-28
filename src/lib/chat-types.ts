@@ -36,6 +36,8 @@ export type VerityDataTypes = {
   eval: EvalScores;
   /** A draft the gate rejected, kept visible so the check is legible. */
   rejected: { attempt: number; reason: string };
+  /** The quality gate is still running after the stream; poll /chat/gate for its verdict. */
+  gate: { pending: true };
 };
 
 /** Per-source details the backend sends that SourceDocumentUIPart has no field for. */

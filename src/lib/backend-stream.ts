@@ -8,14 +8,17 @@ import type { ChatStage, EvalScores, EvalVerdict, Figure, VerityDataTypes } from
  *   meta    -> sources, trace_id, session_id   (sent once retrieval finishes)
  *   stage   -> which phase the pipeline is in
  *   token   -> a piece of the answer, tagged with which attempt it belongs to
- *   eval    -> RAGAS scores and the gate's verdict (AFTER the tokens)
- *   replace -> everything streamed so far is superseded
- *   done    -> usage stats, and which attempt won
+ *   eval    -> RAGAS scores and the gate's verdict (older backends only)
+ *   replace -> everything streamed so far is superseded (older backends only)
+ *   done    -> usage stats, which attempt won, and `gate: "pending"` when the
+ *              quality gate is still running
  *   error   -> { message }
  *
- * The gate runs after the answer has streamed, so a rejected draft and its
- * replacement both reach the client. They are kept in separate text parts;
- * one shared part would render them as a single run-on answer.
+ * The gate now runs after the stream has ended, so sources, figures and the
+ * next question are not held behind it; its verdict and any revised answer
+ * are polled from /chat/gate/{trace_id} (see ./gate.ts). eval/replace are
+ * still handled for a backend that gates inside the stream, where a rejected
+ * draft and its replacement are kept in separate text parts.
  *
  * Keeping the translation here means the backend never has to learn the AI SDK
  * protocol, and useChat on the client needs no custom transport.
@@ -37,7 +40,7 @@ type BackendEvent =
   | { type: "eval"; scores: BackendScores; verdict?: EvalVerdict; attempt?: number }
   | { type: "token"; content: string; attempt?: number }
   | { type: "replace"; reason?: string }
-  | { type: "done"; final_attempt?: number }
+  | { type: "done"; final_attempt?: number; gate?: "pending" }
   | { type: "error"; message?: string };
 
 /** Each attempt gets its own text part. Events predating `attempt` are attempt 1. */
@@ -188,6 +191,7 @@ export async function* adaptBackendEvents(events: AsyncIterable<unknown>): Async
       }
       case "done":
         if (openTextId) yield { type: "text-end", id: openTextId };
+        if (ev.gate === "pending") yield { type: "data-gate", data: { pending: true } };
         yield { type: "finish" };
         return;
       case "error":

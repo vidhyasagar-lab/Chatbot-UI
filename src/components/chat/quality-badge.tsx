@@ -17,7 +17,16 @@ const POLL_DELAYS_MS = [1500, 3000, 6000, 12000, 24000];
  * otherwise the backend scores in the background and /chat/scores/{trace}
  * returns 204 until they exist.
  */
-export function QualityBadge({ gated, traceId }: { gated?: EvalScores; traceId?: string }) {
+export function QualityBadge({
+  gated,
+  traceId,
+  checking = false,
+}: {
+  gated?: EvalScores;
+  traceId?: string;
+  /** The quality gate is still running; its verdict is polled by the caller. */
+  checking?: boolean;
+}) {
   const [scores, setScores] = useState<Scores | null>(
     gated ? { faithfulness: gated.faithfulness, relevancy: null, precision: gated.contextPrecision, threshold: gated.threshold } : null,
   );
@@ -26,7 +35,7 @@ export function QualityBadge({ gated, traceId }: { gated?: EvalScores; traceId?:
   const wrap = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (gated || !traceId) return;
+    if (gated || checking || !traceId) return;
     let attempt = 0;
     let timer: number | undefined;
     const ctrl = new AbortController();
@@ -53,7 +62,7 @@ export function QualityBadge({ gated, traceId }: { gated?: EvalScores; traceId?:
       ctrl.abort();
       window.clearTimeout(timer);
     };
-  }, [gated, traceId]);
+  }, [gated, checking, traceId]);
 
   useEffect(() => {
     if (!open) return;
@@ -70,6 +79,14 @@ export function QualityBadge({ gated, traceId }: { gated?: EvalScores; traceId?:
 
   if (!scores) {
     if (!traceId) return null;
+    if (checking) {
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-shell px-2.5 py-1 text-xs text-faint">
+          <CircleNotch weight="regular" className="size-3.5 animate-spin" />
+          Checking against your documents…
+        </span>
+      );
+    }
     if (gaveUp) {
       return (
         <span
