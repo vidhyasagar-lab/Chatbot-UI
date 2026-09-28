@@ -15,6 +15,7 @@ import { flashSource, SourceChips } from "./source-chips";
 
 const STAGE_COPY: Record<ChatStage, string> = {
   retrieving: "Searching your documents",
+  searching: "Looking in a few more places",
   generating: "Writing the answer",
   scoring: "Checking it against your documents",
   regenerating: "Rewriting from the sources",

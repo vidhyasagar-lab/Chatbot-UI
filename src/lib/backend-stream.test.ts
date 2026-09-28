@@ -1,5 +1,6 @@
 ﻿import { describe, expect, it } from "vitest";
 import { adaptBackendEvents, parseSse } from "./backend-stream";
+import type { ChatStage } from "./chat-types";
 
 /** A byte stream delivered in the given pieces, like a network body. */
 function bytes(...pieces: string[]): ReadableStream<Uint8Array> {
@@ -334,6 +335,20 @@ describe("adaptBackendEvents — a gate that runs after the tokens", () => {
       .map((c) => (c as { data: { stage: string } }).data.stage);
 
     expect(stages).toEqual(["retrieving", "generating", "scoring"]);
+  });
+
+  it("announces a second search before the sources arrive", async () => {
+    const searching: ChatStage = "searching";
+    const out = await collect(
+      adaptBackendEvents(
+        events({ type: "stage", stage: searching, attempt: 1 }, meta, draft, done),
+      ),
+    );
+    const stages = out
+      .filter((c) => c.type === "data-status")
+      .map((c) => (c as { data: { stage: string } }).data.stage);
+
+    expect(stages).toEqual(["retrieving", "searching"]);
   });
 
   it("treats a token with no attempt as attempt 1", async () => {

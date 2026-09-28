@@ -5,7 +5,7 @@ import type { UIMessage } from "ai";
  * inferring one: tokens stream before the gate runs, so "drafting" no longer
  * describes the whole wait.
  */
-export type ChatStage = "retrieving" | "generating" | "scoring" | "regenerating";
+export type ChatStage = "retrieving" | "searching" | "generating" | "scoring" | "regenerating";
 
 /**
  * Why the gate reached its conclusion.
