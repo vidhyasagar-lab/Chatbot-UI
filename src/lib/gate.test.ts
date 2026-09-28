@@ -38,6 +38,21 @@ describe("gateView", () => {
     expect(view.scores).toMatchObject({ verdict: "rejected", passed: false, attempt: 2 });
   });
 
+  it("scores the rewrite with its own faithfulness and gives the draft's as the reason", () => {
+    // The badge on a rewrite used to show the rejected draft's 0.43.
+    const view = gateView("The draft.", { ...rejected, faithfulness: 0.86, draft_faithfulness: 0.43 });
+
+    expect(view.rejected).toEqual({ text: "The draft.", reason: "faithfulness 0.43 < 0.50" });
+    expect(view.scores).toMatchObject({ faithfulness: 0.86, attempt: 2 });
+  });
+
+  it("leaves an unscored rewrite unscored rather than borrowing the draft's score", () => {
+    const view = gateView("The draft.", { ...rejected, faithfulness: null, draft_faithfulness: 0.43 });
+
+    expect(view.rejected?.reason).toBe("faithfulness 0.43 < 0.50");
+    expect(view.scores?.faithfulness).toBeNull();
+  });
+
   it("keeps the draft when a rejection produced no usable rewrite", () => {
     const view = gateView("The draft.", { ...rejected, revised_answer: null });
 

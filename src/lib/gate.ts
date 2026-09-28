@@ -14,6 +14,11 @@ export type GateResult = {
   context_precision: number | null;
   threshold: number;
   revised_answer: string | null;
+  /**
+   * After a rewrite, `faithfulness` is the rewrite's own score and this is the
+   * rejected draft's. Absent from backends older than the rewrite check.
+   */
+  draft_faithfulness?: number | null;
 };
 
 export type GateView = {
@@ -42,7 +47,8 @@ export function gateView(streamed: string, gate: GateResult | null): GateView {
   );
   if (!revised) return { text: streamed, rejected: null, scores };
 
-  const f = gate.faithfulness;
+  // The reason is about the draft; an older backend has only the one score.
+  const f = gate.draft_faithfulness === undefined ? gate.faithfulness : gate.draft_faithfulness;
   const reason =
     f === null
       ? "The quality gate rejected this answer."
