@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { Wordmark } from "@/components/brand";
+import { IdleLogout } from "@/components/idle-logout";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
@@ -24,8 +25,9 @@ export function AdminShell({ username, children }: { username: string; children:
   const pathname = usePathname();
 
   return (
-    <div className="grid min-h-[100dvh] grid-cols-[248px_1fr] bg-background max-md:grid-cols-1">
-      <aside className="sticky top-0 flex h-[100dvh] flex-col gap-6 border-r border-hair bg-rail px-3 py-4 max-md:hidden">
+    <div className="grid min-h-[100dvh] grid-cols-[248px_1fr] max-md:grid-cols-1">
+      <IdleLogout />
+      <aside className="sticky top-0 flex h-[100dvh] flex-col gap-6 border-r border-hair bg-rail/70 px-3 py-4 max-md:hidden">
         <div className="flex items-center justify-between px-2">
           <span className="flex items-baseline gap-2">
             <Wordmark className="text-[15px]" />

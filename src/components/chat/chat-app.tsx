@@ -32,6 +32,7 @@ import {
 import { Wordmark } from "@/components/brand";
 import { DocumentsSheet } from "@/components/documents/documents-sheet";
 import { useDocuments } from "@/components/documents/use-documents";
+import { IdleLogout } from "@/components/idle-logout";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { SessionUser } from "@/lib/backend";
 import { SESSION_EXPIRED } from "@/lib/chat-errors";
@@ -333,8 +334,9 @@ export function ChatApp({ user, initialSessionId = "" }: { user: SessionUser; in
   );
 
   return (
-    <div className="fixed inset-0 grid grid-cols-[272px_1fr] bg-background max-md:grid-cols-1">
-      <aside className="flex min-h-0 flex-col gap-4 border-r border-hair bg-rail px-3 py-4 max-md:hidden">
+    <div className="fixed inset-0 grid grid-cols-[272px_1fr] max-md:grid-cols-1">
+      <IdleLogout />
+      <aside className="flex min-h-0 flex-col gap-4 border-r border-hair bg-rail/70 px-3 py-4 max-md:hidden">
         {renderSidebar(() => undefined)}
       </aside>
 

@@ -47,5 +47,8 @@ export async function POST(req: Request): Promise<Response> {
     },
     onError: () => "The connection to the answer service dropped. Try again.",
   });
-  return createUIMessageStreamResponse({ stream });
+  // Asking a question is activity: pass on the re-signed session cookie so the idle window restarts.
+  const out = new Headers();
+  for (const cookie of upstream.headers.getSetCookie()) out.append("set-cookie", cookie);
+  return createUIMessageStreamResponse({ stream, headers: out });
 }
