@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Instrument_Sans, Newsreader } from "next/font/google";
+import { DotField } from "@/components/dot-field";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
@@ -24,6 +25,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="antialiased">
+        <DotField />
         <TooltipProvider>{children}</TooltipProvider>
       </body>
     </html>

@@ -21,7 +21,7 @@ type Props = { signedIn: boolean };
 /** Public front page. Every claim on it describes something the backend actually does. */
 export function Landing({ signedIn }: Props) {
   return (
-    <div className="relative min-h-[100dvh] overflow-x-clip bg-background">
+    <div className="relative min-h-[100dvh] overflow-x-clip">
       <Nav signedIn={signedIn} />
 
       {/* Hero: editorial split. Headline left, a real-looking answer right. */}
@@ -239,7 +239,6 @@ function Cite({ n }: { n: number }) {
 function AnswerSpecimen() {
   return (
     <div className="relative">
-      <div aria-hidden className="absolute -inset-6 -z-10 rounded-[2.5rem] bg-brand-soft blur-2xl" />
       <figure aria-label="Example answer" className="paper rounded-[1.75rem] p-6 max-md:p-4">
         <div className="flex justify-end">
           <p className="max-w-[80%] rounded-2xl rounded-br-md bg-secondary px-4 py-2.5 text-[14.5px]">What drove the Q3 revenue increase?</p>

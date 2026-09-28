@@ -111,6 +111,11 @@
   --err-soft: rgb(180 67 47 / 0.08);
   --glass: rgb(255 254 251 / 0.85);
   --paper-shadow: 0 1px 2px rgb(60 50 30 / 0.04), 0 12px 32px -18px rgb(60 50 30 / 0.22);
+  /* Atmosphere: graph paper (dots drawn by DotField), a clean sheen from above, no colour cast. */
+  --dots: rgb(28 27 24 / 0.16);
+  --sheen: rgb(255 255 255 / 0.7);
+  --lens-glow: 0.45; /* deep green on cream reads as smoke above this */
+  --grain: 0.03;
   color-scheme: light;
 }
 
@@ -155,6 +160,14 @@
   --err-soft: rgb(229 138 118 / 0.12);
   --glass: rgb(33 31 28 / 0.88);
   --paper-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 16px 40px -20px rgb(0 0 0 / 0.6);
+  /*
+   * Atmosphere: graph paper under a neutral light. Tinted washes over warm
+   * charcoal read as mud, so the sheen carries no hue.
+   */
+  --dots: rgb(236 232 223 / 0.16);
+  --sheen: rgb(255 252 245 / 0.045);
+  --lens-glow: 1;
+  --grain: 0.035;
   color-scheme: dark;
 }
 
@@ -189,8 +202,33 @@
     -webkit-text-size-adjust: 100%;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
+    min-height: 100dvh;
+    /*
+     * One sheen at the top edge, not floating blobs. It stays at the top: the
+     * chat composer fades to the plain background colour at the bottom, and
+     * light there would show as a band behind it.
+     */
+    background:
+      radial-gradient(ellipse 70% 45% at 50% -10%, var(--sheen), transparent 70%),
+      var(--background);
+    background-attachment: fixed;
     transition: background-color 0.6s var(--ease-spring), color 0.6s var(--ease-spring);
+  }
+  /*
+   * Paper grain over everything, cards included, so surfaces read as paper
+   * rather than flat fills. Fixed and non-interactive: it never repaints with
+   * scrolling and never takes a click.
+   */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    pointer-events: none;
+    opacity: var(--grain);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.5 0 0 0 0 0.45 0 0 0 0 0.38 0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 200px 200px;
   }
   ::selection {
     background: var(--mark);
