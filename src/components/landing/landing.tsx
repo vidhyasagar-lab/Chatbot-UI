@@ -12,8 +12,11 @@ import {
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Mark, Wordmark } from "@/components/brand";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { ContactChannels } from "@/components/contact/contact-channels";
+import { LINKEDIN_URL, mailtoLink } from "@/lib/contact";
+import { SITE_NAME } from "@/lib/site";
 import { cn } from "@/lib/utils";
+import { Nav } from "./nav";
 import { Reveal } from "./reveal";
 
 type Props = { signedIn: boolean };
@@ -21,11 +24,11 @@ type Props = { signedIn: boolean };
 /** Public front page. Every claim on it describes something the backend actually does. */
 export function Landing({ signedIn }: Props) {
   return (
-    <div className="relative min-h-[100dvh] overflow-x-clip">
+    <div id="top" className="relative min-h-[100dvh] overflow-x-clip">
       <Nav signedIn={signedIn} />
 
       {/* Hero: editorial split. Headline left, a real-looking answer right. */}
-      <section className="mx-auto grid max-w-[1240px] grid-cols-[1.15fr_1fr] items-center gap-14 px-8 pb-28 pt-40 max-lg:grid-cols-1 max-lg:gap-14 max-md:px-4 max-md:pb-20 max-md:pt-32">
+      <section className="mx-auto grid max-w-[1240px] grid-cols-[1.15fr_1fr] items-center gap-14 px-8 pb-16 pt-36 max-lg:grid-cols-1 max-lg:gap-12 max-md:px-4 max-md:pb-12 max-md:pt-28">
         <div className="animate-rise">
           <p className="inline-flex items-center gap-2 rounded-full border border-hair bg-core px-3 py-1 text-[10.5px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
             <span className="size-1.5 rounded-full bg-ok" />
@@ -57,27 +60,27 @@ export function Landing({ signedIn }: Props) {
       </section>
 
       {/* How it works: three steps, deliberately uneven. */}
-      <section id="how" className="mx-auto max-w-[1200px] scroll-mt-28 px-8 py-28 max-md:px-4 max-md:py-20">
+      <section id="how" className="mx-auto max-w-[1200px] scroll-mt-28 px-8 py-20 max-md:px-4 max-md:py-14">
         <Reveal>
           <Eyebrow>How it works</Eyebrow>
           <h2 className="mt-5 max-w-3xl font-serif text-[clamp(2.2rem,4.4vw,3.4rem)] font-normal leading-[1.04] tracking-[-0.02em]">
             Three steps, and the last one is the one that matters.
           </h2>
         </Reveal>
-        <div className="mt-16 grid grid-cols-12 gap-5 max-md:grid-cols-1">
+        <div className="mt-12 grid grid-cols-12 gap-5 max-md:grid-cols-1">
           <Reveal className="col-span-4 max-md:col-span-1" delay={0}>
             <Step n="01" icon={<UploadSimple weight="regular" />} title="Upload">
               PDF, Word, text, Markdown or images. Charts, tables and diagrams are read by a vision model, so answers can come from figures,
               not just prose.
             </Step>
           </Reveal>
-          <Reveal className="col-span-4 max-md:col-span-1 md:mt-16" delay={100}>
+          <Reveal className="col-span-4 max-md:col-span-1 md:mt-10" delay={100}>
             <Step n="02" icon={<FileMagnifyingGlass weight="regular" />} title="Ask">
               Hybrid search finds the passages, by meaning and by exact wording, and the answer streams in as it is written, citing each
               one.
             </Step>
           </Reveal>
-          <Reveal className="col-span-4 max-md:col-span-1 md:mt-32" delay={200}>
+          <Reveal className="col-span-4 max-md:col-span-1 md:mt-20" delay={200}>
             <Step n="03" icon={<SealCheck weight="regular" />} title="Checked" accent>
               RAGAS scores the answer for faithfulness to those passages. Below the bar, it is rewritten from the sources, and you see both.
             </Step>
@@ -86,8 +89,8 @@ export function Landing({ signedIn }: Props) {
       </section>
 
       {/* The gate: the one idea worth a whole section. */}
-      <section id="quality" className="border-y border-hair bg-rail">
-        <div className="mx-auto grid max-w-[1200px] grid-cols-2 items-center gap-16 px-8 py-32 max-lg:grid-cols-1 max-md:px-4 max-md:py-20">
+      <section id="quality" className="scroll-mt-20 border-y border-hair bg-rail">
+        <div className="mx-auto grid max-w-[1200px] grid-cols-2 items-center gap-14 px-8 py-24 max-lg:grid-cols-1 max-lg:gap-12 max-md:px-4 max-md:py-14">
           <Reveal>
             <Eyebrow>The quality gate</Eyebrow>
             <h2 className="mt-5 font-serif text-[clamp(2.2rem,4.4vw,3.4rem)] font-normal leading-[1.04] tracking-[-0.02em]">
@@ -105,14 +108,14 @@ export function Landing({ signedIn }: Props) {
       </section>
 
       {/* For whoever runs it. */}
-      <section className="mx-auto max-w-[1200px] px-8 py-28 max-md:px-4 max-md:py-20">
+      <section id="admins" className="mx-auto max-w-[1200px] scroll-mt-28 px-8 py-20 max-md:px-4 max-md:py-14">
         <Reveal>
           <Eyebrow>For admins</Eyebrow>
           <h2 className="mt-5 max-w-3xl font-serif text-[clamp(2rem,3.6vw,2.8rem)] font-normal leading-[1.08] tracking-[-0.02em]">
             Measure quality across every question, not one answer at a time.
           </h2>
         </Reveal>
-        <div className="mt-14 grid grid-cols-3 gap-5 max-md:grid-cols-1">
+        <div className="mt-12 grid grid-cols-3 gap-5 max-md:grid-cols-1">
           {[
             { icon: <Exam weight="regular" />, title: "Golden dataset", body: "Question-and-answer pairs written by hand or generated from your documents." },
             { icon: <ChartLineUp weight="regular" />, title: "Evaluation runs", body: "Ask every golden question and score faithfulness, relevance, precision and recall." },
@@ -130,14 +133,14 @@ export function Landing({ signedIn }: Props) {
       </section>
 
       {/* Closing call to action. */}
-      <section className="mx-auto max-w-[1200px] px-8 pb-32 max-md:px-4 max-md:pb-24">
+      <section className="mx-auto max-w-[1200px] px-8 pb-20 max-md:px-4 max-md:pb-14">
         <Reveal>
-          <div className="relative overflow-hidden rounded-[2rem] bg-brand px-12 py-20 text-brand-ink max-md:px-6 max-md:py-14">
+          <div className="relative overflow-hidden rounded-[2rem] bg-brand px-12 py-16 text-brand-ink max-md:px-6 max-md:py-12">
             <Mark className="absolute -right-10 -top-14 size-64 rotate-12 rounded-[3.5rem] bg-brand-ink/10 text-[12rem] text-brand-ink/15" />
             <h2 className="relative max-w-2xl font-serif text-[clamp(2.2rem,4.6vw,3.6rem)] font-normal leading-[1.02] tracking-[-0.02em]">
               Stop wondering whether the answer is right.
             </h2>
-            <div className="relative mt-10">
+            <div className="relative mt-8">
               <PrimaryCta href={signedIn ? "/chat" : "/login?mode=register"} inverted>
                 {signedIn ? "Open your chats" : "Get started"}
               </PrimaryCta>
@@ -146,42 +149,113 @@ export function Landing({ signedIn }: Props) {
         </Reveal>
       </section>
 
-      <footer className="border-t border-hair">
-        <div className="mx-auto flex max-w-[1200px] flex-wrap items-center justify-between gap-4 px-8 py-8 text-[13px] text-faint max-md:px-4">
-          <Wordmark className="text-[14px] text-muted-foreground" />
-          <span>Retrieval-augmented answers, scored with RAGAS.</span>
-        </div>
-      </footer>
+      {/* A quiet coda after the call to action: the person behind it, and how to reach them. */}
+      <section id="contact" className="mx-auto max-w-[1200px] scroll-mt-28 px-8 pb-24 max-md:px-4 max-md:pb-16">
+        <Reveal>
+          <div className="grid grid-cols-[0.85fr_1.15fr] items-start gap-14 max-lg:grid-cols-1 max-lg:gap-8">
+            <div>
+              <Eyebrow>Contact</Eyebrow>
+              <h2 className="mt-5 font-serif text-[clamp(2rem,3.6vw,2.8rem)] font-normal leading-[1.08] tracking-[-0.02em]">
+                Questions, or want this on <em className="text-brand">your documents?</em>
+              </h2>
+              <p className="mt-5 max-w-md text-[15.5px] leading-relaxed text-muted-foreground">
+                Verity is designed and built by Vidhyasagar Kokirala. Both of these reach him directly, so say what you need and it will get a
+                proper answer.
+              </p>
+            </div>
+            <ContactChannels subject="Verity" columns={1} />
+          </div>
+        </Reveal>
+      </section>
+
+      <Footer signedIn={signedIn} />
     </div>
   );
 }
 
-/** Floating island nav, detached from the top edge. */
-function Nav({ signedIn }: Props) {
+/** Site map, account links and the copyright line. The year is read per request, so it never goes stale. */
+function Footer({ signedIn }: Props) {
+  const columns = [
+    {
+      title: "Product",
+      links: [
+        { href: "#how", label: "How it works" },
+        { href: "#quality", label: "Quality gate" },
+        { href: "#admins", label: "For admins" },
+      ],
+    },
+    {
+      title: "Account",
+      links: signedIn
+        ? [{ href: "/chat", label: "Open your chats" }]
+        : [
+            { href: "/login?mode=register", label: "Create an account" },
+            { href: "/login", label: "Sign in" },
+          ],
+    },
+    {
+      title: "Contact",
+      links: [
+        { href: "/contact", label: "Get in touch" },
+        { href: mailtoLink("Verity"), label: "Email", external: false },
+        { href: LINKEDIN_URL, label: "LinkedIn", external: true },
+      ],
+    },
+  ];
+
   return (
-    <div className="fixed inset-x-0 top-5 z-30 flex justify-center px-4">
-      <nav
-        aria-label="Main"
-        className="flex items-center gap-1 rounded-full border border-hair bg-glass py-1.5 pl-4 pr-1.5 shadow-[var(--paper-shadow)] backdrop-blur-md"
-      >
-        <Link href="/" className="mr-3" aria-label="Verity home">
-          <Wordmark className="text-[15px]" />
-        </Link>
-        <a href="#how" className="rounded-full px-3 py-1.5 text-[13.5px] text-muted-foreground transition-colors hover:text-foreground max-sm:hidden">
-          How it works
-        </a>
-        <a href="#quality" className="rounded-full px-3 py-1.5 text-[13.5px] text-muted-foreground transition-colors hover:text-foreground max-sm:hidden">
-          Quality
-        </a>
-        <ThemeToggle />
-        <Link
-          href={signedIn ? "/chat" : "/login"}
-          className="ml-1 rounded-full bg-foreground px-4 py-1.5 text-[13.5px] font-medium text-background transition-transform duration-300 ease-spring active:scale-[0.97]"
-        >
-          {signedIn ? "Open app" : "Sign in"}
-        </Link>
-      </nav>
-    </div>
+    <footer className="border-t border-hair">
+      <div className="mx-auto grid max-w-[1200px] grid-cols-[1.5fr_1fr_1fr_1fr] gap-10 px-8 pb-10 pt-14 max-lg:grid-cols-[1.4fr_1fr_1fr] max-md:grid-cols-2 max-md:gap-8 max-md:px-4 max-sm:grid-cols-1">
+        <div className="max-lg:col-span-3 max-md:col-span-2 max-sm:col-span-1">
+          <a href="#top" aria-label="Verity, back to top" className="-mx-1 inline-block rounded-md px-1 py-0.5 transition-opacity hover:opacity-80">
+            <Wordmark className="text-[15px]" />
+          </a>
+          <p className="mt-3 max-w-[20rem] text-[13.5px] leading-relaxed text-muted-foreground">
+            Answers from your documents, cited to the page and scored against your sources before you read them.
+          </p>
+        </div>
+        {columns.map((c) => (
+          <nav key={c.title} aria-label={c.title}>
+            <p className="text-[11.5px] font-medium uppercase tracking-[0.18em] text-faint">{c.title}</p>
+            <ul className="mt-4 flex flex-col gap-2.5">
+              {c.links.map((l) => (
+                <li key={l.href}>
+                  <FooterLink href={l.href} external={"external" in l ? l.external : undefined}>
+                    {l.label}
+                  </FooterLink>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        ))}
+      </div>
+      <div className="mx-auto max-w-[1200px] px-8 max-md:px-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-hair py-6 text-[12.5px] text-faint">
+          <p>
+            © {new Date().getFullYear()} {SITE_NAME}. Retrieval-augmented answers, scored with RAGAS.
+          </p>
+          <a href="#top" className="transition-colors hover:text-foreground">
+            Back to top ↑
+          </a>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+function FooterLink({ href, external, children }: { href: string; external?: boolean; children: ReactNode }) {
+  const cls = "text-[14px] text-muted-foreground transition-colors hover:text-foreground";
+  // Only in-app routes go through Link. Anchors, mailto: and off-site links are
+  // plain anchors; routing a mailto through the client router does nothing useful.
+  const plain = href.startsWith("#") || href.startsWith("mailto:") || /^https?:/.test(href);
+  return plain ? (
+    <a href={href} className={cls} {...(external ? { target: "_blank", rel: "noreferrer noopener" } : {})}>
+      {children}
+    </a>
+  ) : (
+    <Link href={href} className={cls}>
+      {children}
+    </Link>
   );
 }
 
@@ -270,6 +344,7 @@ function AnswerSpecimen() {
             </span>
           </div>
         </div>
+        <SpecimenCaption>Example answer, shown the way Verity shows yours.</SpecimenCaption>
       </figure>
     </div>
   );
@@ -298,6 +373,12 @@ function GateSpecimen() {
         <SealCheck weight="regular" className="size-3.5" />
         Verified · 0.91
       </span>
+      <SpecimenCaption>Example of a draft the gate rejected and the rewrite that replaced it.</SpecimenCaption>
     </figure>
   );
+}
+
+/** Labels the specimens as illustrations, so their figures are never mistaken for real data. */
+function SpecimenCaption({ children }: { children: ReactNode }) {
+  return <figcaption className="mt-5 border-t border-hair pt-3 text-[11.5px] text-faint">{children}</figcaption>;
 }

@@ -74,7 +74,7 @@ export function Usage() {
               <Empty title="No traces yet">Ask Verity a question and it will show up here.</Empty>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[720px] text-left text-[13.5px]">
+                <table className="stack-table w-full min-w-[720px] text-left text-[13.5px]">
                   <thead>
                     <tr className="border-b border-hair text-[11.5px] uppercase tracking-[0.1em] text-faint">
                       <th className="px-5 py-2.5 font-medium">When</th>
@@ -93,9 +93,16 @@ export function Usage() {
                             onClick={() => setOpenId(open ? null : t.id)}
                             className={cn("cursor-pointer border-b border-hair transition-colors hover:bg-shell", open && "bg-shell")}
                           >
-                            <td className="whitespace-nowrap px-5 py-3 text-muted-foreground">{formatWhen(t.created_at)}</td>
-                            <td className="max-w-[320px] px-3 py-3">
-                              <button type="button" aria-expanded={open} className="block max-w-full truncate text-left font-medium">
+                            <td data-label="When" className="whitespace-nowrap px-5 py-3 text-muted-foreground">
+                              {formatWhen(t.created_at)}
+                            </td>
+                            <td data-primary className="max-w-[320px] px-3 py-3">
+                              {/* The row handles the click; this button gives keyboard and screen reader users the same toggle. */}
+                              <button
+                                type="button"
+                                aria-expanded={open}
+                                className="block max-w-full truncate text-left font-medium max-md:line-clamp-2 max-md:whitespace-normal max-md:[overflow-wrap:anywhere]"
+                              >
                                 {traceTitle(t.input, t.name || t.id.slice(0, 8)).slice(0, 140)}
                               </button>
                               <span className="mt-1 flex flex-wrap gap-1.5">
@@ -107,11 +114,15 @@ export function Usage() {
                                 ))}
                               </span>
                             </td>
-                            <td className="whitespace-nowrap px-3 py-3 text-right font-mono text-[12.5px] text-muted-foreground">
+                            <td data-label="Tokens in / out" className="whitespace-nowrap px-3 py-3 text-right font-mono text-[12.5px] text-muted-foreground">
                               {formatNumber(t.usage.input)} / {formatNumber(t.usage.output)}
                             </td>
-                            <td className="whitespace-nowrap px-3 py-3 text-right font-mono text-[12.5px]">{formatCost(t.total_cost)}</td>
-                            <td className="whitespace-nowrap px-5 py-3 text-right font-mono text-[12.5px]">{formatLatency(t.latency)}</td>
+                            <td data-label="Cost" className="whitespace-nowrap px-3 py-3 text-right font-mono text-[12.5px]">
+                              {formatCost(t.total_cost)}
+                            </td>
+                            <td data-label="Latency" className="whitespace-nowrap px-5 py-3 text-right font-mono text-[12.5px]">
+                              {formatLatency(t.latency)}
+                            </td>
                           </tr>
                           {open && (
                             <tr className="border-b border-hair bg-shell">
@@ -120,7 +131,7 @@ export function Usage() {
                                   <TraceText label="Input">{t.input}</TraceText>
                                   <TraceText label="Output">{t.output}</TraceText>
                                 </div>
-                                <p className="mt-3 font-mono text-[11.5px] text-faint">
+                                <p className="mt-3 font-mono text-[11.5px] text-faint [overflow-wrap:anywhere]">
                                   trace {t.id}
                                   {t.session_id ? ` · session ${t.session_id}` : ""}
                                 </p>
@@ -143,9 +154,9 @@ export function Usage() {
 
 function Stat({ label, value, delay }: { label: string; value: string; delay: number }) {
   return (
-    <div className="paper animate-rise rounded-2xl p-6" style={{ animationDelay: `${delay}ms` }}>
+    <div className="paper animate-rise rounded-2xl p-6 max-md:p-5" style={{ animationDelay: `${delay}ms` }}>
       <p className="text-[11.5px] font-medium uppercase tracking-[0.12em] text-muted-foreground">{label}</p>
-      <p className="mt-4 font-serif text-[2.5rem] font-normal leading-none tracking-[-0.02em]">{value}</p>
+      <p className="mt-4 font-serif text-[2.5rem] font-normal leading-none tracking-[-0.02em] max-md:mt-3 max-md:text-[2.1rem]">{value}</p>
     </div>
   );
 }
@@ -157,7 +168,7 @@ function PageButton({ label, disabled, onClick, children }: { label: string; dis
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className="grid size-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-shell hover:text-foreground disabled:opacity-40 [&_svg]:size-4"
+      className="grid size-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-shell hover:text-foreground disabled:opacity-40 pointer-coarse:size-10 [&_svg]:size-4"
     >
       {children}
     </button>
@@ -168,7 +179,9 @@ function TraceText({ label, children }: { label: string; children: string }) {
   return (
     <div className="rounded-xl border border-hair bg-core p-4">
       <p className="text-[11.5px] font-medium uppercase tracking-[0.12em] text-faint">{label}</p>
-      <p className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap text-[13px] leading-relaxed text-muted-foreground">{children || "—"}</p>
+      <p className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap text-[13px] leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
+        {children || "Nothing recorded."}
+      </p>
     </div>
   );
 }

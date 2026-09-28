@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type DocumentRecord, validateUpload } from "@/lib/documents";
+import { toast } from "@/lib/toast";
 
 export type UploadItem = {
   id: string;
@@ -51,24 +52,46 @@ async function fetchDocuments(): Promise<DocumentRecord[] | null> {
   }
 }
 
+const LOAD_FAILED = "Couldn't load your documents.";
+
 export function useDocuments() {
   const [docs, setDocs] = useState<DocumentRecord[] | null>(null);
   const [uploads, setUploads] = useState<UploadItem[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  // Set when the list has never loaded; a failed refresh keeps the last known list instead.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const queue = useRef<Promise<void>>(Promise.resolve());
+  const loaded = useRef(false);
 
   const refresh = useCallback(async () => {
     const list = await fetchDocuments();
-    if (list) setDocs(list);
+    if (list) {
+      loaded.current = true;
+      setDocs(list);
+      setLoadError(null);
+    } else if (!loaded.current) {
+      setLoadError(LOAD_FAILED);
+    }
+    return list;
   }, []);
 
   useEffect(() => {
     let alive = true;
-    fetchDocuments().then((list) => alive && list && setDocs(list));
+    fetchDocuments().then((list) => {
+      if (!alive) return;
+      if (list) {
+        loaded.current = true;
+        setDocs(list);
+      } else setLoadError(LOAD_FAILED);
+    });
     return () => {
       alive = false;
     };
   }, []);
+
+  const retryLoad = useCallback(() => {
+    setLoadError(null);
+    void refresh();
+  }, [refresh]);
 
   const patch = (id: string, change: Partial<UploadItem>) =>
     setUploads((list) => list.map((u) => (u.id === id ? { ...u, ...change } : u)));
@@ -93,9 +116,20 @@ export function useDocuments() {
               () => patch(id, { phase: "indexing", progress: 1 }),
             );
             setUploads((list) => list.filter((u) => u.id !== id));
-            await refresh();
+            const list = await refresh();
+            const added = list?.find((d) => d.filename === file.name);
+            toast.success(
+              added
+                ? `${file.name} is ready to search: ${added.chunks_added} passage${added.chunks_added === 1 ? "" : "s"}${
+                    added.images_extracted ? `, ${added.images_extracted} figure${added.images_extracted === 1 ? "" : "s"}` : ""
+                  }.`
+                : `${file.name} is ready to search.`,
+            );
           } catch (e) {
-            patch(id, { phase: "error", error: (e as Error).message });
+            const message = (e as Error).message;
+            patch(id, { phase: "error", error: message });
+            // The sheet may be closed by now; the row alone could go unseen.
+            toast.error(`Couldn't add ${file.name}. ${message}`);
           }
         });
       }
@@ -107,20 +141,31 @@ export function useDocuments() {
 
   const remove = useCallback(
     async (docId: string) => {
-      setError(null);
+      const doc = docs?.find((d) => d.doc_id === docId);
+      const name = doc?.filename ?? "the document";
       setDocs((list) => list?.filter((d) => d.doc_id !== docId) ?? null); // optimistic
       try {
         const res = await fetch(`/api/v1/documents/${encodeURIComponent(docId)}`, { method: "DELETE" });
         if (!res.ok) throw new Error();
+        toast.success(`Deleted ${name}. Answers no longer draw on it.`);
       } catch {
-        setError("Couldn't delete that document. It's back in the list.");
+        toast.error(`Couldn't delete ${name}. It's back in the list.`);
         await refresh();
       }
     },
-    [refresh],
+    [docs, refresh],
   );
 
-  return { docs, uploads, error, add, dismiss, remove, busy: uploads.some((u) => u.phase !== "error") };
+  return {
+    docs,
+    uploads,
+    loadError,
+    retryLoad,
+    add,
+    dismiss,
+    remove,
+    busy: uploads.some((u) => u.phase !== "error"),
+  };
 }
 
 export type DocumentsState = ReturnType<typeof useDocuments>;

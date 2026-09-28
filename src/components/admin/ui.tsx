@@ -35,12 +35,12 @@ export function Panel({ className, children }: { className?: string; children: R
 
 export function PanelHeader({ title, meta, actions }: { title: string; meta?: ReactNode; actions?: ReactNode }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-hair px-5 py-3.5">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-hair px-5 py-3.5 max-md:px-4">
       <div className="flex items-baseline gap-2.5">
         <h2 className="text-[14px] font-semibold">{title}</h2>
         {meta && <span className="text-[12.5px] text-faint">{meta}</span>}
       </div>
-      {actions && <div className="flex items-center gap-2">{actions}</div>}
+      {actions && <div className="flex items-center justify-end gap-2 max-sm:w-full">{actions}</div>}
     </div>
   );
 }
@@ -65,7 +65,7 @@ export function Button({ children, onClick, type = "button", variant = "quiet", 
       title={title}
       aria-busy={busy || undefined}
       className={cn(
-        "inline-flex h-9 items-center justify-center gap-2 rounded-lg px-3.5 text-[13.5px] font-medium transition-[background-color,border-color,filter,transform] duration-300 ease-spring active:scale-[0.98] disabled:pointer-events-none disabled:opacity-55 [&_svg]:size-4",
+        "inline-flex h-9 items-center justify-center gap-2 rounded-lg px-3.5 text-[13.5px] font-medium transition-[background-color,border-color,filter,transform] duration-300 ease-spring active:scale-[0.98] disabled:pointer-events-none disabled:opacity-55 pointer-coarse:h-11 [&_svg]:size-4",
         variant === "primary" && "bg-brand text-brand-ink hover:brightness-110",
         variant === "quiet" && "border border-hair-strong bg-core text-foreground hover:border-faint",
         variant === "danger" && "bg-err-soft text-err hover:brightness-95",
@@ -97,8 +97,9 @@ export function ConfirmButton({
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
   const confirm = (
-    <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-err-soft py-1 pl-3 pr-1 text-[12.5px] text-err">
-      {question}
+    // Capped at the screen width: a long name in the question must not push the buttons off a phone.
+    <span className="inline-flex max-w-[calc(100vw-2.5rem)] items-center gap-1.5 whitespace-nowrap rounded-lg bg-err-soft py-1 pl-3 pr-1 text-[12.5px] text-err">
+      <span className="min-w-0 truncate">{question}</span>
       <button
         type="button"
         autoFocus
@@ -112,14 +113,14 @@ export function ConfirmButton({
             setAsking(false);
           }
         }}
-        className="rounded-md px-2 py-1 font-semibold transition-colors hover:bg-err-soft disabled:opacity-60"
+        className="shrink-0 rounded-md px-2 py-1 font-semibold transition-colors hover:bg-err-soft disabled:opacity-60 pointer-coarse:py-2"
       >
         {busy ? "…" : confirmLabel}
       </button>
       <button
         type="button"
         onClick={() => setAsking(false)}
-        className="rounded-md px-2 py-1 text-muted-foreground transition-colors hover:bg-shell"
+        className="shrink-0 rounded-md px-2 py-1 text-muted-foreground transition-colors hover:bg-shell pointer-coarse:py-2"
       >
         Cancel
       </button>
@@ -142,7 +143,7 @@ export function ConfirmButton({
         onClick={() => setAsking(true)}
         aria-label={label}
         title={label}
-        className="grid size-8 place-items-center rounded-lg text-faint transition-colors hover:bg-err-soft hover:text-err [&_svg]:size-4"
+        className="grid size-8 place-items-center rounded-lg text-faint transition-colors hover:bg-err-soft hover:text-err pointer-coarse:size-10 [&_svg]:size-4"
       >
         {icon}
       </button>
@@ -160,12 +161,12 @@ export function ErrorNote({ message, onRetry }: { message: string; onRetry?: () 
   return (
     <p role="alert" className="animate-rise flex items-center gap-3 rounded-xl bg-err-soft px-4 py-3 text-[13.5px]">
       <WarningCircle weight="regular" className="size-5 shrink-0 text-err" />
-      <span className="flex-1">{message}</span>
+      <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{message}</span>
       {onRetry && (
         <button
           type="button"
           onClick={onRetry}
-          className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[13px] transition-colors hover:bg-shell"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-[13px] transition-colors hover:bg-shell pointer-coarse:py-2"
         >
           <ArrowClockwise weight="regular" className="size-3.5" />
           Retry
@@ -273,7 +274,7 @@ export function Field({
       {multiline ? (
         <textarea rows={3} className={cn(cls, "resize-y py-2.5 leading-relaxed")} {...input} />
       ) : (
-        <input className={cn(cls, "h-10")} {...input} />
+        <input className={cn(cls, "h-10 pointer-coarse:h-12")} {...input} />
       )}
       {hint && <span className="text-[11.5px] text-faint">{hint}</span>}
     </label>

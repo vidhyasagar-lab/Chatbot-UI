@@ -5,6 +5,7 @@ import {
   Files,
   FlowArrow,
   List,
+  PaperPlaneTilt,
   Paperclip,
   Plus,
   SealCheck,
@@ -38,6 +39,7 @@ import type { SessionUser } from "@/lib/backend";
 import { SESSION_EXPIRED } from "@/lib/chat-errors";
 import type { ChatStage, VerityMessage } from "@/lib/chat-types";
 import { autoTitle } from "@/lib/sessions";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { AssistantMessage, textOf } from "./assistant-message";
 import { HistoryList } from "./history-list";
@@ -244,11 +246,40 @@ export function ChatApp({ user, initialSessionId = "" }: { user: SessionUser; in
     };
   }, [menuOpen]);
 
+  const [signingOut, setSigningOut] = useState(false);
   const signOut = async () => {
-    await fetch("/api/v1/auth/logout", { method: "POST" }).catch(() => undefined);
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      const res = await fetch("/api/v1/auth/logout", { method: "POST" });
+      if (!res.ok) throw new Error(String(res.status));
+    } catch {
+      // Still signed in: moving to /login would only bounce back here.
+      setSigningOut(false);
+      toast.error("Couldn't sign out. Check your connection and try again.");
+      return;
+    }
+    toast.success("Signed out. See you next time.");
     router.replace("/login");
     router.refresh();
   };
+
+  /** The logo is the app's home: a fresh chat. A real link underneath, so it can still open in a new tab. */
+  const renderLogo = (close: () => void, className?: string) => (
+    <Link
+      href="/chat"
+      aria-label="Verity, start a new chat"
+      onClick={(e) => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+        e.preventDefault();
+        newChat();
+        close();
+      }}
+      className={cn("-mx-1 rounded-md px-1 py-0.5 transition-opacity hover:opacity-80", className)}
+    >
+      <Wordmark className="text-[15px]" />
+    </Link>
+  );
 
   const lastId = messages.at(-1)?.id;
 
@@ -259,7 +290,7 @@ export function ChatApp({ user, initialSessionId = "" }: { user: SessionUser; in
   const renderSidebar = (close: () => void) => (
     <>
       <div className="flex items-center justify-between px-2">
-        <Wordmark className="text-[15px]" />
+        {renderLogo(close)}
         <ThemeToggle />
       </div>
       <button
@@ -268,7 +299,7 @@ export function ChatApp({ user, initialSessionId = "" }: { user: SessionUser; in
           newChat();
           close();
         }}
-        className="flex items-center justify-between rounded-xl border border-hair-strong bg-core px-3.5 py-2.5 text-[13.5px] font-medium transition-[border-color,transform] duration-300 ease-spring hover:border-faint active:scale-[0.985]"
+        className="flex items-center justify-between rounded-xl border border-hair-strong bg-core px-3.5 py-2.5 text-[13.5px] font-medium transition-[border-color,transform] duration-300 ease-spring hover:border-faint active:scale-[0.985] pointer-coarse:py-3"
       >
         <span className="inline-flex items-center gap-2">
           <Plus weight="regular" className="size-4" />
@@ -291,7 +322,8 @@ export function ChatApp({ user, initialSessionId = "" }: { user: SessionUser; in
         {user.role === "admin" && (
           <Link
             href="/admin"
-            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] text-muted-foreground transition-colors hover:bg-shell hover:text-foreground"
+            onClick={close}
+            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] text-muted-foreground transition-colors hover:bg-shell hover:text-foreground pointer-coarse:py-3"
           >
             <ShieldCheck weight="regular" className="size-[18px]" />
             Admin
@@ -303,14 +335,22 @@ export function ChatApp({ user, initialSessionId = "" }: { user: SessionUser; in
             close();
             setDocsOpen(true);
           }}
-          className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] text-muted-foreground transition-colors hover:bg-shell hover:text-foreground"
+          className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] text-muted-foreground transition-colors hover:bg-shell hover:text-foreground pointer-coarse:py-3"
         >
           <Files weight="regular" className="size-[18px]" />
           Documents
           <span className="ml-auto rounded-md bg-shell px-1.5 font-mono text-[11px] text-muted-foreground">
-            {documents.docs === null ? "…" : docCount}
+            {documents.loadError ? "!" : documents.docs === null ? "…" : docCount}
           </span>
         </button>
+        <Link
+          href="/contact"
+          onClick={close}
+          className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] text-muted-foreground transition-colors hover:bg-shell hover:text-foreground pointer-coarse:py-3"
+        >
+          <PaperPlaneTilt weight="regular" className="size-[18px]" />
+          Contact
+        </Link>
       </div>
       <div className="flex items-center gap-2.5 border-t border-hair px-2 pt-3 text-[13px]">
         <span className="grid size-7 place-items-center rounded-full bg-mark font-serif text-[13px] font-medium uppercase text-mark-ink">
@@ -323,9 +363,10 @@ export function ChatApp({ user, initialSessionId = "" }: { user: SessionUser; in
         <button
           type="button"
           onClick={signOut}
+          disabled={signingOut}
           aria-label="Sign out"
           title="Sign out"
-          className="ml-auto grid size-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-shell hover:text-foreground"
+          className="ml-auto grid size-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-shell hover:text-foreground disabled:opacity-50 pointer-coarse:size-10"
         >
           <SignOut weight="regular" className="size-[18px]" />
         </button>
@@ -375,20 +416,29 @@ export function ChatApp({ user, initialSessionId = "" }: { user: SessionUser; in
           >
             <List weight="regular" className="size-5" />
           </button>
-          <Wordmark className="text-[15px] md:hidden" />
+          {renderLogo(() => undefined, "md:hidden")}
           <span className="flex-1" />
           <button
             type="button"
             onClick={() => setDocsOpen(true)}
-            className="inline-flex items-center gap-2 rounded-full border border-hair bg-core px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-hair-strong hover:text-foreground"
+            className="inline-flex min-w-0 items-center gap-2 rounded-full border border-hair bg-core px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-hair-strong hover:text-foreground pointer-coarse:py-2.5"
           >
-            <span className={docCount ? "size-1.5 rounded-full bg-ok" : "size-1.5 rounded-full bg-warn"} />
-            {documents.docs === null
-              ? "Loading documents"
-              : docCount
-                ? `Searching ${docCount} document${docCount === 1 ? "" : "s"}`
-                : "No documents yet"}
-            {documents.busy && <span className="text-brand">· indexing</span>}
+            <span
+              className={cn(
+                "size-1.5 shrink-0 rounded-full",
+                documents.loadError ? "bg-err" : docCount ? "bg-ok" : "bg-warn",
+              )}
+            />
+            <span className="truncate">
+              {documents.loadError
+                ? "Documents unavailable"
+                : documents.docs === null
+                  ? "Loading documents"
+                  : docCount
+                    ? `Searching ${docCount} document${docCount === 1 ? "" : "s"}`
+                    : "No documents yet"}
+            </span>
+            {documents.busy && <span className="shrink-0 text-brand">· indexing</span>}
           </button>
         </header>
         <Conversation className="min-h-0">
@@ -406,7 +456,13 @@ export function ChatApp({ user, initialSessionId = "" }: { user: SessionUser; in
               </p>
             ) : messages.length === 0 ? (
               <EmptyState
-                onPick={(t) => ask(t)}
+                onPick={(t) => {
+                  try {
+                    ask(t);
+                  } catch {
+                    // ask() refuses while an answer is still streaming; the card simply does nothing then.
+                  }
+                }}
                 noDocuments={documents.docs !== null && docCount === 0 && !documents.busy}
                 onUpload={() => setDocsOpen(true)}
               />
@@ -414,7 +470,7 @@ export function ChatApp({ user, initialSessionId = "" }: { user: SessionUser; in
               messages.map((m) =>
                 m.role === "user" ? (
                   <Message key={m.id} from="user" className="animate-rise">
-                    <MessageContent className="max-w-[82%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-secondary px-4 py-2.5 text-[15px] text-foreground group-[.is-user]:rounded-2xl group-[.is-user]:rounded-br-md group-[.is-user]:bg-secondary group-[.is-user]:text-foreground">
+                    <MessageContent className="max-w-[82%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-secondary px-4 py-2.5 text-[15px] text-foreground [overflow-wrap:anywhere] group-[.is-user]:rounded-2xl group-[.is-user]:rounded-br-md group-[.is-user]:bg-secondary group-[.is-user]:text-foreground max-md:max-w-[90%]">
                       {textOf(m)}
                     </MessageContent>
                   </Message>
@@ -425,6 +481,7 @@ export function ChatApp({ user, initialSessionId = "" }: { user: SessionUser; in
                     streaming={busy && m.id === lastId}
                     stage={stage}
                     stopped={stoppedIds.has(m.id)}
+                    canRetry={!busy && m.id === lastId}
                     onRetry={() => retry(m.id)}
                   />
                 ),
@@ -438,6 +495,7 @@ export function ChatApp({ user, initialSessionId = "" }: { user: SessionUser; in
                 streaming
                 stage={stage}
                 stopped={false}
+                canRetry={false}
                 onRetry={() => undefined}
               />
             )}
@@ -483,7 +541,7 @@ export function ChatApp({ user, initialSessionId = "" }: { user: SessionUser; in
                       onClick={() => setDocsOpen(true)}
                       aria-label="Add documents"
                       title="Add documents"
-                      className="grid size-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-shell hover:text-foreground"
+                      className="grid size-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-shell hover:text-foreground pointer-coarse:size-10"
                     >
                       <Paperclip weight="regular" className="size-[18px]" />
                     </button>
@@ -494,7 +552,7 @@ export function ChatApp({ user, initialSessionId = "" }: { user: SessionUser; in
                   <PromptInputSubmit
                     status={status}
                     onStop={stopNow}
-                    className="size-8 rounded-lg bg-brand text-brand-ink hover:bg-brand hover:brightness-110"
+                    className="size-8 rounded-lg bg-brand text-brand-ink hover:bg-brand hover:brightness-110 pointer-coarse:size-10"
                   />
                 </PromptInputFooter>
               </PromptInput>

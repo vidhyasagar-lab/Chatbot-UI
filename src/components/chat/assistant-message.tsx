@@ -7,6 +7,7 @@ import { Message, MessageContent, MessageResponse } from "@/components/ai-elemen
 import { Mark } from "@/components/brand";
 import type { ChatStage, VerityMessage } from "@/lib/chat-types";
 import { linkCitations } from "@/lib/citations";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { FigureStrip } from "./figure-strip";
 import { QualityBadge } from "./quality-badge";
@@ -74,10 +75,16 @@ type Props = {
   streaming: boolean;
   stage: ChatStage | null;
   stopped: boolean;
+  /**
+   * Only the newest answer, and only while nothing is streaming. Regenerating an
+   * older answer would drop every turn after it on screen while the backend
+   * kept them, and during a stream the request would be refused.
+   */
+  canRetry: boolean;
   onRetry: () => void;
 };
 
-export function AssistantMessage({ message, streaming, stage, stopped, onRetry }: Props) {
+export function AssistantMessage({ message, streaming, stage, stopped, canRetry, onRetry }: Props) {
   const text = textOf(message);
   const rejected = rejectedDraftOf(message);
   const sources = message.parts.filter((p): p is SourceDocumentUIPart => p.type === "source-document");
@@ -102,7 +109,7 @@ export function AssistantMessage({ message, streaming, stage, stopped, onRetry }
           {streaming && rejected && !text && <StageLine stage="regenerating" />}
 
           {text && (
-            <MessageContent className="w-full font-serif text-[17px] leading-[1.7] [&_code]:font-mono [&_pre]:font-mono [&_strong]:font-semibold">
+            <MessageContent className="w-full font-serif text-[17px] leading-[1.7] [overflow-wrap:anywhere] max-md:text-[16px] [&_code]:font-mono [&_pre]:font-mono [&_strong]:font-semibold">
               <MessageResponse
                 mode={streaming ? "streaming" : "static"}
                 isAnimating={streaming}
@@ -125,7 +132,7 @@ export function AssistantMessage({ message, streaming, stage, stopped, onRetry }
                     <QualityBadge gated={gated} traceId={meta?.traceId} />
                   </span>
                 )}
-                <Actions text={text} traceId={meta?.traceId} onRetry={onRetry} />
+                <Actions text={text} traceId={meta?.traceId} onRetry={canRetry ? onRetry : undefined} />
               </div>
             </div>
           )}
@@ -147,7 +154,7 @@ function RejectedDraft({ text, reason }: { text: string; reason: string }) {
         <span aria-hidden className="size-1.5 rounded-full bg-warn" />
         Draft rejected by the quality gate — {reason}
       </p>
-      <p className="text-[14px] leading-[1.65] text-faint line-through decoration-faint/40">{text}</p>
+      <p className="text-[14px] leading-[1.65] text-faint line-through decoration-faint/40 [overflow-wrap:anywhere]">{text}</p>
     </div>
   );
 }
@@ -164,32 +171,43 @@ function StageLine({ stage }: { stage: ChatStage }) {
   );
 }
 
-function Actions({ text, traceId, onRetry }: { text: string; traceId?: string; onRetry: () => void }) {
+function Actions({ text, traceId, onRetry }: { text: string; traceId?: string; onRetry?: () => void }) {
   const [copied, setCopied] = useState(false);
   const [vote, setVote] = useState<0 | 1 | null>(null);
+  const [sending, setSending] = useState(false);
 
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
+      toast.success("Answer copied.");
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
-      // clipboard blocked; nothing useful to show
+      toast.error("Couldn't copy. Your browser blocked the clipboard; select the text and copy it instead.");
     }
   };
 
   const rate = async (score: 0 | 1) => {
+    if (sending) return;
+    const before = vote;
     const next = vote === score ? null : score;
     setVote(next);
+    // Taking a vote back is local only: the backend records votes, it can't retract one.
     if (next === null || !traceId) return;
+    setSending(true);
     try {
-      await fetch("/api/v1/feedback/", {
+      const res = await fetch("/api/v1/feedback/", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ trace_id: traceId, score: next }),
       });
+      if (!res.ok) throw new Error(String(res.status));
+      toast.success(next === 1 ? "Thanks. Marked as a good answer." : "Thanks. Marked as a bad answer; it helps tune retrieval.");
     } catch {
-      // feedback is best-effort
+      setVote(before);
+      toast.error("Couldn't send your feedback. Try again in a moment.");
+    } finally {
+      setSending(false);
     }
   };
 
@@ -210,9 +228,11 @@ function Actions({ text, traceId, onRetry }: { text: string; traceId?: string; o
           </IconAction>
         </>
       )}
-      <IconAction label="Regenerate" onClick={onRetry}>
-        <ArrowClockwise weight="regular" />
-      </IconAction>
+      {onRetry && (
+        <IconAction label="Regenerate" onClick={onRetry}>
+          <ArrowClockwise weight="regular" />
+        </IconAction>
+      )}
     </div>
   );
 }
@@ -236,7 +256,7 @@ function IconAction({
       aria-pressed={pressed}
       onClick={onClick}
       className={cn(
-        "grid size-8 place-items-center rounded-full text-muted-foreground transition-[background-color,color,transform] duration-300 ease-spring hover:bg-shell hover:text-foreground active:scale-95 [&_svg]:size-4",
+        "grid size-8 place-items-center rounded-full text-muted-foreground transition-[background-color,color,transform] duration-300 ease-spring hover:bg-shell hover:text-foreground active:scale-95 pointer-coarse:size-10 [&_svg]:size-4",
         pressed && "bg-brand-soft text-brand hover:bg-brand-soft hover:text-brand",
       )}
     >

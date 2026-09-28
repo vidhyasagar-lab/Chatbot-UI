@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { toast } from "@/lib/toast";
 
 export class AdminError extends Error {
   constructor(
@@ -38,6 +39,7 @@ export async function adminJson<T>(path: string, init?: { method?: string; body?
   }
   if (res.status === 401) {
     // A full load on purpose: nothing from the lapsed session should survive. replace: Back must not return here.
+    toast.flash("info", "Your session expired. Sign in again to carry on.");
     window.location.replace("/login");
     throw new AdminError("Your session has expired. Sign in again.", 401);
   }

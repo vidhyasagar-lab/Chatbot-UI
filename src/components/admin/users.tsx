@@ -3,6 +3,7 @@
 import { Plus, Trash, X } from "@phosphor-icons/react";
 import { useState, type FormEvent } from "react";
 import { type AdminUser, formatNumber, formatWhen } from "@/lib/admin";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { adminJson, useAdminData } from "./admin-api";
 import { Badge, Button, ConfirmButton, Empty, ErrorNote, Field, Loading, PageHeader, Panel, PanelHeader } from "./ui";
@@ -10,15 +11,19 @@ import { Badge, Button, ConfirmButton, Empty, ErrorNote, Field, Loading, PageHea
 export function Users({ currentUserId }: { currentUserId: string }) {
   const users = useAdminData<AdminUser[]>("/users");
   const [creating, setCreating] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
 
-  const run = async (fn: () => Promise<unknown>) => {
-    setActionError(null);
+  /**
+   * Run one row action, then say how it went. A toast rather than a note at
+   * the top of the page: the row may be far down a long list, especially on a
+   * phone, where a note up top would go unseen.
+   */
+  const run = async (fn: () => Promise<unknown>, done: string, failed: string) => {
     try {
       await fn();
+      toast.success(done);
       await users.reload();
     } catch (e) {
-      setActionError((e as Error).message);
+      toast.error(`${failed} ${(e as Error).message}`);
     }
   };
 
@@ -43,14 +48,13 @@ export function Users({ currentUserId }: { currentUserId: string }) {
       {creating && (
         <CreateUser
           onCancel={() => setCreating(false)}
-          onCreated={async () => {
+          onCreated={async (username, role) => {
             setCreating(false);
+            toast.success(`Created ${username} as ${role === "admin" ? "an admin" : "a user"}. Share the temporary password privately.`);
             await users.reload();
           }}
         />
       )}
-
-      {actionError && <ErrorNote message={actionError} />}
 
       <Panel className="animate-rise overflow-hidden">
         <PanelHeader
@@ -67,7 +71,7 @@ export function Users({ currentUserId }: { currentUserId: string }) {
           <Empty title="No users yet" />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left text-[13.5px]">
+            <table className="stack-table w-full min-w-[640px] text-left text-[13.5px]">
               <thead>
                 <tr className="border-b border-hair text-[11.5px] uppercase tracking-[0.1em] text-faint">
                   <th className="px-5 py-2.5 font-medium">User</th>
@@ -82,7 +86,7 @@ export function Users({ currentUserId }: { currentUserId: string }) {
                   const me = u.user_id === currentUserId;
                   return (
                     <tr key={u.user_id} className="border-b border-hair last:border-0 transition-colors hover:bg-shell">
-                      <td className="px-5 py-3">
+                      <td data-primary className="px-5 py-3">
                         <span className="flex items-center gap-3">
                           <span className="grid size-8 shrink-0 place-items-center rounded-full bg-mark font-serif text-[13px] font-medium uppercase text-mark-ink">
                             {u.username.slice(0, 2)}
@@ -93,24 +97,32 @@ export function Users({ currentUserId }: { currentUserId: string }) {
                           </span>
                         </span>
                       </td>
-                      <td className="px-3 py-3">
+                      <td data-label="Role" className="px-3 py-3">
                         {me ? (
                           <Badge tone="brand">admin</Badge>
                         ) : (
                           <RoleSwitch
                             role={u.role}
                             onChange={(role) =>
-                              run(() => adminJson(`/users/${encodeURIComponent(u.user_id)}/role`, { method: "PATCH", body: { role } }))
+                              run(
+                                () => adminJson(`/users/${encodeURIComponent(u.user_id)}/role`, { method: "PATCH", body: { role } }),
+                                role === "admin" ? `${u.username} is now an admin.` : `${u.username} is now a regular user.`,
+                                `Couldn't change ${u.username}'s role.`,
+                              )
                             }
                           />
                         )}
                       </td>
-                      <td className="px-3 py-3 font-mono text-[13px] text-muted-foreground">
-                        {formatNumber(u.doc_count)}
-                        <span className="text-faint"> · {formatNumber(u.total_chunks)} chunks</span>
+                      <td data-label="Documents" className="px-3 py-3 font-mono text-[13px] text-muted-foreground">
+                        <span>
+                          {formatNumber(u.doc_count)}
+                          <span className="text-faint"> · {formatNumber(u.total_chunks)} chunks</span>
+                        </span>
                       </td>
-                      <td className="px-3 py-3 text-muted-foreground">{formatWhen(u.created_at)}</td>
-                      <td className="px-5 py-3 text-right">
+                      <td data-label="Joined" className="px-3 py-3 text-muted-foreground">
+                        {formatWhen(u.created_at)}
+                      </td>
+                      <td className="px-5 py-3 text-right max-md:empty:hidden">
                         {!me && (
                           <ConfirmButton
                             compact
@@ -118,7 +130,13 @@ export function Users({ currentUserId }: { currentUserId: string }) {
                             question={`Delete ${u.username}?`}
                             confirmLabel="Delete"
                             icon={<Trash weight="regular" />}
-                            onConfirm={() => run(() => adminJson(`/users/${encodeURIComponent(u.user_id)}`, { method: "DELETE" }))}
+                            onConfirm={() =>
+                              run(
+                                () => adminJson(`/users/${encodeURIComponent(u.user_id)}`, { method: "DELETE" }),
+                                `Deleted ${u.username}.`,
+                                `Couldn't delete ${u.username}.`,
+                              )
+                            }
                           />
                         )}
                       </td>
@@ -146,7 +164,7 @@ function RoleSwitch({ role, onChange }: { role: string; onChange: (role: "user" 
           aria-checked={role === r}
           onClick={() => role !== r && onChange(r)}
           className={cn(
-            "rounded-md px-2.5 py-1 text-[12.5px] capitalize transition-[background-color,color] duration-300 ease-spring",
+            "rounded-md px-2.5 py-1 text-[12.5px] capitalize transition-[background-color,color] duration-300 ease-spring pointer-coarse:px-3.5 pointer-coarse:py-2",
             role === r ? "bg-core font-medium text-foreground shadow-[0_0_0_1px_var(--hair)]" : "text-muted-foreground hover:text-foreground",
           )}
         >
@@ -157,7 +175,7 @@ function RoleSwitch({ role, onChange }: { role: string; onChange: (role: "user" 
   );
 }
 
-function CreateUser({ onCancel, onCreated }: { onCancel: () => void; onCreated: () => void }) {
+function CreateUser({ onCancel, onCreated }: { onCancel: () => void; onCreated: (username: string, role: "user" | "admin") => void }) {
   const [role, setRole] = useState<"user" | "admin">("user");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -167,15 +185,23 @@ function CreateUser({ onCancel, onCreated }: { onCancel: () => void; onCreated: 
     const form = new FormData(e.currentTarget);
     const username = String(form.get("username") ?? "").trim();
     const password = String(form.get("password") ?? "");
-    if (!username || password.length < 8) {
-      setError("Enter a username and a password of at least 8 characters.");
+    if (!username) {
+      setError("Enter a username.");
+      return;
+    }
+    if (!/^[\w\-. ]+$/.test(username)) {
+      setError("Usernames can use letters, numbers, spaces, dots, dashes and underscores.");
+      return;
+    }
+    if (password.length < 8) {
+      setError("The temporary password needs at least 8 characters.");
       return;
     }
     setBusy(true);
     setError(null);
     try {
       await adminJson("/users", { method: "POST", body: { username, password, role } });
-      onCreated();
+      onCreated(username, role);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -188,7 +214,12 @@ function CreateUser({ onCancel, onCreated }: { onCancel: () => void; onCreated: 
       <PanelHeader
         title="New user"
         actions={
-          <button type="button" onClick={onCancel} aria-label="Cancel" className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-shell">
+          <button
+            type="button"
+            onClick={onCancel}
+            aria-label="Cancel new user"
+            className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-shell pointer-coarse:size-10"
+          >
             <X weight="regular" className="size-4" />
           </button>
         }

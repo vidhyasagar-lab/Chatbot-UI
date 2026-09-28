@@ -25,6 +25,10 @@ export function Overview() {
 
   const s = stats.data;
   const latest = runs.data?.[0];
+  const failed = [stats, runs, golden, usage].filter((r) => r.error).length;
+  const retryAll = () => {
+    for (const r of [stats, runs, golden, usage]) if (r.error) void r.reload();
+  };
 
   return (
     <>
@@ -38,7 +42,16 @@ export function Overview() {
         description="Everything stored, everyone using it, and how well answers hold up against the sources."
       />
 
-      {stats.error && <ErrorNote message={stats.error} onRetry={stats.reload} />}
+      {failed > 0 && (
+        <ErrorNote
+          message={
+            failed === 1
+              ? `One part of the overview couldn't load. ${[stats, runs, golden, usage].find((r) => r.error)?.error ?? ""}`
+              : `${failed} parts of the overview couldn't load. The server may be busy.`
+          }
+          onRetry={retryAll}
+        />
+      )}
 
       {/* Asymmetric bento: one tall tile for the knowledge base, smaller tiles around it. */}
       <div className="grid grid-cols-12 gap-4 max-lg:grid-cols-6 max-md:grid-cols-1">
@@ -47,8 +60,10 @@ export function Overview() {
           <p className="mt-6 font-serif text-[clamp(3.5rem,7vw,5.5rem)] font-normal leading-none tracking-[-0.03em]">
             {s ? formatNumber(s.total_docs) : "—"}
           </p>
-          <p className="mt-2 text-[14px] text-muted-foreground">documents uploaded across all users</p>
-          <dl className="mt-10 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-hair pt-6 sm:grid-cols-4">
+          <p className="mt-2 text-[14px] text-muted-foreground">
+            {stats.error ? "Couldn't load the knowledge base totals." : "documents uploaded across all users"}
+          </p>
+          <dl className="mt-10 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-hair pt-6 max-md:mt-7 sm:grid-cols-4">
             <Metric label="Chunks" value={s ? formatNumber(s.total_chunks) : "—"} />
             <Metric label="Figures" value={s ? formatNumber(s.total_images) : "—"} />
             <Metric label="Storage" value={s ? formatBytes(s.total_size_bytes) : "—"} />
@@ -59,7 +74,9 @@ export function Overview() {
         <Tile href="/admin/users" className="col-span-5 max-lg:col-span-3 max-md:col-span-1" delay={60}>
           <TileLabel>Users</TileLabel>
           <BigNumber>{s ? formatNumber(s.total_users) : "—"}</BigNumber>
-          <p className="text-[13px] text-muted-foreground">accounts, including admins</p>
+          <p className={cn("text-[13px]", stats.error ? "text-err" : "text-muted-foreground")}>
+            {stats.error ? "Couldn't load the user count." : "accounts, including admins"}
+          </p>
         </Tile>
 
         <Tile href="/admin/evaluations" className="col-span-5 max-lg:col-span-3 max-md:col-span-1" delay={120}>
@@ -90,12 +107,16 @@ export function Overview() {
         <Tile href="/admin/golden" className="col-span-6 max-lg:col-span-3 max-md:col-span-1" delay={180}>
           <TileLabel>Golden dataset</TileLabel>
           <BigNumber>{golden.data ? formatNumber(golden.data.length) : "—"}</BigNumber>
-          <p className="text-[13px] text-muted-foreground">question-and-answer pairs used to test quality</p>
+          <p className={cn("text-[13px]", golden.error ? "text-err" : "text-muted-foreground")}>
+            {golden.error ? "Couldn't load the golden dataset." : "question-and-answer pairs used to test quality"}
+          </p>
         </Tile>
 
         <Tile href="/admin/usage" className="col-span-6 max-lg:col-span-3 max-md:col-span-1" delay={240}>
           <TileLabel>Usage · last 100 traces</TileLabel>
-          {usage.data && !usage.data.enabled ? (
+          {usage.error ? (
+            <p className="mt-4 text-[13px] text-err">Couldn&apos;t load usage from the server.</p>
+          ) : usage.data && !usage.data.enabled ? (
             <p className="mt-4 text-[13.5px] text-muted-foreground">Langfuse isn&apos;t configured on the backend.</p>
           ) : usage.data && "error" in usage.data && usage.data.error ? (
             <p className="mt-4 text-[13px] text-err">Langfuse returned an error.</p>
@@ -129,7 +150,7 @@ function Tile({ href, className, delay, children }: { href?: string; className?:
     </>
   );
   const cls = cn(
-    "paper animate-rise relative flex flex-col rounded-2xl p-6",
+    "paper animate-rise relative flex flex-col rounded-2xl p-6 max-md:p-5",
     href && "group transition-[border-color,transform] duration-500 ease-spring hover:-translate-y-0.5 hover:border-hair-strong",
     className,
   );

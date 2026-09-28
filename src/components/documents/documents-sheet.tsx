@@ -82,7 +82,7 @@ export function DocumentsSheet({ open, onClose, state }: { open: boolean; onClos
                 type="button"
                 onClick={onClose}
                 aria-label="Close documents"
-                className="grid size-9 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-shell hover:text-foreground"
+                className="grid size-9 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-shell hover:text-foreground pointer-coarse:size-11"
               >
                 <X weight="regular" className="size-[18px]" />
               </button>
@@ -117,13 +117,6 @@ export function DocumentsSheet({ open, onClose, state }: { open: boolean; onClos
               />
             </label>
 
-            {state.error && (
-              <p role="alert" className="flex items-center gap-2 rounded-xl bg-err-soft px-3 py-2 text-[12.5px]">
-                <WarningCircle weight="regular" className="size-4 shrink-0 text-err" />
-                {state.error}
-              </p>
-            )}
-
             {state.uploads.length > 0 && (
               <ul aria-label="Uploads in progress" className="flex flex-col gap-1.5">
                 {state.uploads.map((u) => (
@@ -133,8 +126,22 @@ export function DocumentsSheet({ open, onClose, state }: { open: boolean; onClos
             )}
 
             <section className="flex flex-col gap-1.5">
-              {state.docs === null ? (
-                <p className="px-1 text-[13px] text-faint">Loading your documents…</p>
+              {state.loadError ? (
+                <p role="alert" className="flex items-center gap-2 rounded-xl bg-err-soft py-2 pl-3 pr-1.5 text-[12.5px]">
+                  <WarningCircle weight="regular" className="size-4 shrink-0 text-err" />
+                  <span className="flex-1">{state.loadError}</span>
+                  <button
+                    type="button"
+                    onClick={state.retryLoad}
+                    className="rounded-md px-2.5 py-1 text-[12.5px] font-medium transition-colors hover:bg-shell pointer-coarse:py-2"
+                  >
+                    Try again
+                  </button>
+                </p>
+              ) : state.docs === null ? (
+                <p role="status" className="px-1 text-[13px] text-faint">
+                  Loading your documents…
+                </p>
               ) : state.docs.length === 0 && state.uploads.length === 0 ? (
                 <p className="px-1 text-[13px] text-faint">No documents yet. Upload one to start asking questions.</p>
               ) : (
@@ -171,7 +178,7 @@ function UploadRow({ item, onDismiss }: { item: UploadItem; onDismiss: () => voi
       <FileIcon name={item.name} />
       <div className="min-w-0">
         <div className="truncate text-[13.5px]">{item.name}</div>
-        <small className={cn("block text-[11.5px]", item.phase === "error" ? "text-err" : "text-faint")}>{label}</small>
+        <small className={cn("block text-[11.5px] [overflow-wrap:anywhere]", item.phase === "error" ? "text-err" : "text-faint")}>{label}</small>
         {item.phase !== "error" && (
           <span className="mt-1.5 block h-[3px] overflow-hidden rounded-full bg-hair">
             <span
@@ -185,7 +192,12 @@ function UploadRow({ item, onDismiss }: { item: UploadItem; onDismiss: () => voi
         )}
       </div>
       {item.phase === "error" ? (
-        <button type="button" onClick={onDismiss} aria-label={`Dismiss ${item.name}`} className="grid size-8 place-items-center rounded-full text-muted-foreground hover:bg-shell">
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label={`Dismiss ${item.name}`}
+          className="grid size-8 place-items-center rounded-full text-muted-foreground hover:bg-shell pointer-coarse:size-10"
+        >
           <X weight="regular" className="size-4" />
         </button>
       ) : (
@@ -199,8 +211,8 @@ function DocRow({ doc, onDelete }: { doc: DocumentRecord; onDelete: () => void }
   const [confirming, setConfirming] = useState(false);
   const meta = [
     formatBytes(doc.file_size),
-    `${doc.chunks_added} chunks`,
-    doc.images_extracted ? `${doc.images_extracted} figures` : null,
+    `${doc.chunks_added} passage${doc.chunks_added === 1 ? "" : "s"}`,
+    doc.images_extracted ? `${doc.images_extracted} figure${doc.images_extracted === 1 ? "" : "s"}` : null,
     doc.uploaded_at ? dateFmt.format(new Date(doc.uploaded_at)) : null,
   ]
     .filter(Boolean)
@@ -219,12 +231,17 @@ function DocRow({ doc, onDelete }: { doc: DocumentRecord; onDelete: () => void }
         <span className="flex items-center gap-1">
           <button
             type="button"
+            autoFocus
             onClick={onDelete}
-            className="rounded-full bg-err-soft px-3 py-1 text-[12px] text-err transition-transform duration-300 ease-spring active:scale-95"
+            className="rounded-full bg-err-soft px-3 py-1 text-[12px] text-err transition-transform duration-300 ease-spring active:scale-95 pointer-coarse:py-2"
           >
             Delete
           </button>
-          <button type="button" onClick={() => setConfirming(false)} className="rounded-full px-2.5 py-1 text-[12px] text-muted-foreground hover:bg-shell">
+          <button
+            type="button"
+            onClick={() => setConfirming(false)}
+            className="rounded-full px-2.5 py-1 text-[12px] text-muted-foreground hover:bg-shell pointer-coarse:py-2"
+          >
             Keep
           </button>
         </span>
@@ -233,7 +250,7 @@ function DocRow({ doc, onDelete }: { doc: DocumentRecord; onDelete: () => void }
           type="button"
           onClick={() => setConfirming(true)}
           aria-label={`Delete ${doc.filename}`}
-          className="grid size-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-shell hover:text-err"
+          className="grid size-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-shell hover:text-err pointer-coarse:size-10"
         >
           <Trash weight="regular" className="size-4" />
         </button>

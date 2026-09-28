@@ -2,9 +2,10 @@
 
 import { ArrowLeft, CaretDown, Play } from "@phosphor-icons/react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MessageResponse } from "@/components/ai-elements/message";
 import { type EvalResult, type EvalRun, type GoldenSample, averageScore, formatWhen, runProgress } from "@/lib/admin";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { adminJson, useAdminData } from "./admin-api";
 import { Badge, Button, Empty, ErrorNote, Loading, PageHeader, Panel, PanelHeader, Score } from "./ui";
@@ -46,29 +47,47 @@ function Progress({ run }: { run: EvalRun }) {
   );
 }
 
+/** Announce a run that finishes while its page is open: it may have been running for minutes. */
+function useFinishNotice(runs: EvalRun[] | null | undefined) {
+  const seen = useRef<Map<string, EvalRun["status"]>>(new Map());
+  useEffect(() => {
+    if (!runs) return;
+    for (const r of runs) {
+      const before = seen.current.get(r.id);
+      if (before === "running" && r.status === "completed") {
+        const overall = averageScore(r);
+        toast.success(`Evaluation finished: ${r.completed} question${r.completed === 1 ? "" : "s"} scored${overall === null ? "" : `, overall ${overall.toFixed(2)}`}.`);
+      }
+      if (before === "running" && r.status === "failed") {
+        toast.error(`The evaluation stopped early after ${r.completed} of ${r.total_samples} questions.`);
+      }
+      seen.current.set(r.id, r.status);
+    }
+  }, [runs]);
+}
+
 export function Evaluations() {
   const runs = useAdminData<EvalRun[]>("/evaluate/runs");
   const golden = useAdminData<GoldenSample[]>("/golden");
   const [starting, setStarting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const running = runs.data?.some((r) => r.status === "running") ?? false;
   usePolling(running, runs.reload);
+  useFinishNotice(runs.data);
+  const samples = golden.data?.length ?? 0;
 
   const start = async () => {
     setStarting(true);
-    setError(null);
     try {
       await adminJson("/evaluate", { method: "POST" });
+      toast.success(`Evaluation started on ${samples} pair${samples === 1 ? "" : "s"}. This page updates as it scores.`);
       await runs.reload();
     } catch (e) {
-      setError((e as Error).message);
+      toast.error(`Couldn't start the evaluation. ${(e as Error).message}`);
     } finally {
       setStarting(false);
     }
   };
-
-  const samples = golden.data?.length ?? 0;
 
   return (
     <>
@@ -108,7 +127,7 @@ export function Evaluations() {
           first.
         </p>
       )}
-      {error && <ErrorNote message={error} />}
+      {golden.error && <ErrorNote message={`Couldn't load the golden dataset, so a run can't start. ${golden.error}`} onRetry={golden.reload} />}
 
       <Panel className="animate-rise overflow-hidden">
         <PanelHeader title="Runs" meta={running ? "Updating every 5 seconds" : runs.data ? `Last ${runs.data.length}` : undefined} />
@@ -122,7 +141,7 @@ export function Evaluations() {
           <Empty title="No runs yet">Start one to see how answers score against the golden dataset.</Empty>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left text-[13.5px]">
+            <table className="stack-table w-full min-w-[760px] text-left text-[13.5px]">
               <thead>
                 <tr className="border-b border-hair text-[11.5px] uppercase tracking-[0.1em] text-faint">
                   <th className="px-5 py-2.5 font-medium">Started</th>
@@ -138,31 +157,32 @@ export function Evaluations() {
               <tbody>
                 {runs.data.map((r) => (
                   <tr key={r.id} className="group relative border-b border-hair last:border-0 transition-colors hover:bg-shell">
-                    <td className="px-5 py-3">
+                    <td data-primary className="px-5 py-3">
                       {/* The whole row opens the run; the link covers it. */}
                       <Link href={`/admin/evaluations/${r.id}`} className="font-medium after:absolute after:inset-0">
                         {formatWhen(r.created_at)}
                       </Link>
                     </td>
-                    <td className="px-3 py-3">
+                    <td data-label="Status" className="px-3 py-3">
                       <StatusBadge run={r} />
                     </td>
-                    <td className="px-3 py-3">
+                    <td data-label="Progress" className="px-3 py-3">
                       <Progress run={r} />
                     </td>
-                    <td className="px-3 py-3">
+                    <td data-label="Faithful" className="px-3 py-3">
                       <Score value={r.avg_faithfulness} />
                     </td>
-                    <td className="px-3 py-3">
+                    {/* Phones get faithfulness and the overall score; the run page has every metric. */}
+                    <td data-label="Relevant" data-mobile-hidden className="px-3 py-3">
                       <Score value={r.avg_relevancy} />
                     </td>
-                    <td className="px-3 py-3">
+                    <td data-label="Precision" data-mobile-hidden className="px-3 py-3">
                       <Score value={r.avg_context_precision} />
                     </td>
-                    <td className="px-3 py-3">
+                    <td data-label="Recall" data-mobile-hidden className="px-3 py-3">
                       <Score value={r.avg_context_recall} />
                     </td>
-                    <td className="px-5 py-3">
+                    <td data-label="Overall" className="px-5 py-3">
                       <Score value={averageScore(r)} />
                     </td>
                   </tr>
@@ -180,6 +200,7 @@ export function EvaluationRun({ runId }: { runId: string }) {
   const detail = useAdminData<{ run: EvalRun; results: EvalResult[] }>(`/evaluate/runs/${encodeURIComponent(runId)}`);
   const run = detail.data?.run;
   usePolling(run?.status === "running", detail.reload);
+  useFinishNotice(run ? [run] : null);
 
   return (
     <>
@@ -272,9 +293,9 @@ function ResultRow({ result: r }: { result: EvalResult }) {
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="grid w-full grid-cols-[1fr_auto_auto] items-center gap-5 px-5 py-4 text-left transition-colors hover:bg-shell max-md:grid-cols-[1fr_auto]"
+        className="grid w-full grid-cols-[1fr_auto_auto] items-center gap-5 px-5 py-4 text-left transition-colors hover:bg-shell max-md:grid-cols-[1fr_auto] max-md:gap-3 max-md:px-4"
       >
-        <span className="min-w-0 text-[14px] font-medium leading-snug">{r.question}</span>
+        <span className="min-w-0 text-[14px] font-medium leading-snug [overflow-wrap:anywhere]">{r.question}</span>
         <span className="flex gap-4 max-md:hidden">
           <Score value={r.faithfulness} label="Faithfulness" />
           <Score value={r.answer_relevancy} label="Relevancy" />
@@ -284,8 +305,8 @@ function ResultRow({ result: r }: { result: EvalResult }) {
         <CaretDown weight="regular" className={cn("size-4 text-faint transition-transform duration-300 ease-spring", open && "rotate-180")} />
       </button>
       {open && (
-        <div className="grid gap-5 px-5 pb-5 md:grid-cols-2">
-          <div className="flex gap-4 md:hidden md:col-span-2">
+        <div className="grid gap-5 px-5 pb-5 max-md:gap-4 max-md:px-4 md:grid-cols-2">
+          <div className="grid grid-cols-4 gap-3 md:hidden">
             <Score value={r.faithfulness} label="Faithfulness" />
             <Score value={r.answer_relevancy} label="Relevancy" />
             <Score value={r.context_precision} label="Precision" />
@@ -307,7 +328,7 @@ function ResultRow({ result: r }: { result: EvalResult }) {
               </summary>
               <ol className="mt-3 flex flex-col gap-2">
                 {r.contexts.map((c, i) => (
-                  <li key={i} className="rounded-lg bg-core-2 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-muted-foreground">
+                  <li key={i} className="rounded-lg bg-core-2 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
                     {c}
                   </li>
                 ))}
@@ -324,7 +345,7 @@ function Block({ label, children }: { label: string; children: React.ReactNode }
   return (
     <div className="rounded-xl border border-hair bg-core-2 p-4">
       <p className="text-[11.5px] font-medium uppercase tracking-[0.12em] text-faint">{label}</p>
-      <div className="mt-2 whitespace-pre-wrap font-serif text-[15px] leading-relaxed [&_p]:whitespace-normal">{children}</div>
+      <div className="mt-2 whitespace-pre-wrap font-serif text-[15px] leading-relaxed [overflow-wrap:anywhere] [&_p]:whitespace-normal">{children}</div>
     </div>
   );
 }

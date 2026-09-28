@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { type GoldenSample, formatWhen } from "@/lib/admin";
 import type { DocumentRecord } from "@/lib/documents";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { adminJson, useAdminData } from "./admin-api";
 import { Badge, Button, ConfirmButton, Empty, ErrorNote, Field, Loading, PageHeader, Panel, PanelHeader } from "./ui";
@@ -16,8 +17,6 @@ export function Golden() {
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -28,15 +27,14 @@ export function Golden() {
     );
   }, [golden.data, query, filter]);
 
-  const act = async (fn: () => Promise<unknown>, done?: string) => {
-    setActionError(null);
-    setNotice(null);
+  /** Run an action and report it; `done` may depend on what the action returned. */
+  const act = async <T,>(fn: () => Promise<T>, done: (result: T) => string, failed: string) => {
     try {
-      await fn();
-      if (done) setNotice(done);
+      const result = await fn();
+      toast.success(done(result));
       await golden.reload();
     } catch (e) {
-      setActionError((e as Error).message);
+      toast.error(`${failed} ${(e as Error).message}`);
     }
   };
 
@@ -61,10 +59,11 @@ export function Golden() {
                 confirmLabel="Clear"
                 icon={<Trash weight="regular" />}
                 onConfirm={() =>
-                  act(async () => {
-                    const r = await adminJson<{ deleted: number }>("/golden", { method: "DELETE" });
-                    setNotice(`Cleared ${r.deleted} pair${r.deleted === 1 ? "" : "s"}.`);
-                  })
+                  act(
+                    () => adminJson<{ deleted: number }>("/golden", { method: "DELETE" }),
+                    (r) => `Cleared the golden dataset: ${r.deleted} pair${r.deleted === 1 ? "" : "s"} deleted.`,
+                    "Couldn't clear the golden dataset.",
+                  )
                 }
               />
             )}
@@ -85,15 +84,10 @@ export function Golden() {
               onCancel={() => setAdding(false)}
               onAdded={async () => {
                 setAdding(false);
+                toast.success("Pair added. The next evaluation run will ask it.");
                 await golden.reload();
               }}
             />
-          )}
-          {actionError && <ErrorNote message={actionError} />}
-          {notice && (
-            <p role="status" className="animate-rise rounded-xl bg-ok-soft px-4 py-3 text-[13.5px] text-ok">
-              {notice}
-            </p>
           )}
 
           <Panel className="animate-rise overflow-hidden">
@@ -101,16 +95,16 @@ export function Golden() {
               title="Pairs"
               meta={golden.data ? (shown.length === total ? `${total}` : `${shown.length} of ${total}`) : undefined}
               actions={
-                <div className="flex items-center gap-2 max-sm:flex-wrap">
-                  <label className="relative">
+                <div className="flex items-center gap-2 max-sm:w-full max-sm:flex-wrap">
+                  <label className="relative max-sm:w-full">
                     <span className="sr-only">Search pairs</span>
                     <MagnifyingGlass weight="regular" className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-faint" />
                     <input
                       type="search"
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
-                      placeholder="Search"
-                      className="h-8 w-44 rounded-lg border border-hair bg-background pl-8 pr-2.5 text-[13px] outline-none transition-[border-color] focus:border-brand"
+                      placeholder="Search pairs"
+                      className="h-8 w-44 rounded-lg border border-hair bg-background pl-8 pr-2.5 text-[13px] outline-none transition-[border-color] focus:border-brand max-sm:w-full pointer-coarse:h-11"
                     />
                   </label>
                   <span role="radiogroup" aria-label="Show" className="inline-flex rounded-lg border border-hair bg-core-2 p-0.5">
@@ -122,7 +116,7 @@ export function Golden() {
                         aria-checked={filter === f}
                         onClick={() => setFilter(f)}
                         className={cn(
-                          "rounded-md px-2 py-0.5 text-[12px] capitalize transition-colors",
+                          "rounded-md px-2 py-0.5 text-[12px] capitalize transition-colors pointer-coarse:px-3 pointer-coarse:py-2",
                           filter === f ? "bg-core font-medium shadow-[0_0_0_1px_var(--hair)]" : "text-muted-foreground",
                         )}
                       >
@@ -146,8 +140,8 @@ export function Golden() {
             ) : (
               <ul>
                 {shown.map((s) => (
-                  <li key={s.id} className="group grid grid-cols-[1fr_auto] gap-4 border-b border-hair px-5 py-4 last:border-0">
-                    <div className="min-w-0">
+                  <li key={s.id} className="group grid grid-cols-[1fr_auto] gap-4 border-b border-hair px-5 py-4 last:border-0 max-md:gap-3 max-md:px-4">
+                    <div className="min-w-0 [overflow-wrap:anywhere]">
                       <p className="text-[14.5px] font-medium leading-snug">{s.question}</p>
                       <p className="mt-1.5 line-clamp-3 font-serif text-[15px] leading-relaxed text-muted-foreground">{s.ground_truth}</p>
                       <p className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-faint">
@@ -162,7 +156,13 @@ export function Golden() {
                       question="Delete?"
                       confirmLabel="Delete"
                       icon={<Trash weight="regular" />}
-                      onConfirm={() => act(() => adminJson(`/golden/${encodeURIComponent(s.id)}`, { method: "DELETE" }))}
+                      onConfirm={() =>
+                        act(
+                          () => adminJson(`/golden/${encodeURIComponent(s.id)}`, { method: "DELETE" }),
+                          () => "Pair deleted.",
+                          "Couldn't delete that pair.",
+                        )
+                      }
                     />
                   </li>
                 ))}
@@ -171,13 +171,22 @@ export function Golden() {
           </Panel>
         </div>
 
-        <Generate onGenerated={(n) => act(async () => undefined, `Generated ${n} new pair${n === 1 ? "" : "s"}.`)} />
+        <Generate
+          onGenerated={async (n) => {
+            toast.success(
+              n > 0
+                ? `Generated ${n} new pair${n === 1 ? "" : "s"}. Review them before trusting a score.`
+                : "No new pairs were generated. Upload documents to your account first.",
+            );
+            await golden.reload();
+          }}
+        />
       </div>
     </>
   );
 }
 
-function Generate({ onGenerated }: { onGenerated: (count: number) => void }) {
+function Generate({ onGenerated }: { onGenerated: (count: number) => Promise<void> }) {
   const [count, setCount] = useState(3);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -187,9 +196,10 @@ function Generate({ onGenerated }: { onGenerated: (count: number) => void }) {
     setError(null);
     try {
       const r = await adminJson<{ count: number }>("/golden/generate", { method: "POST", body: { count_per_doc: count } });
-      onGenerated(r.count);
+      await onGenerated(r.count);
     } catch (e) {
       setError((e as Error).message);
+      toast.error(`Couldn't generate pairs. ${(e as Error).message}`);
     } finally {
       setBusy(false);
     }
@@ -274,20 +284,19 @@ function AddPair({ onCancel, onAdded }: { onCancel: () => void; onAdded: () => v
       <PanelHeader
         title="New pair"
         actions={
-          <button type="button" onClick={onCancel} aria-label="Cancel" className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-shell">
+          <button
+            type="button"
+            onClick={onCancel}
+            aria-label="Cancel new pair"
+            className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-shell pointer-coarse:size-10"
+          >
             <X weight="regular" className="size-4" />
           </button>
         }
       />
       <form onSubmit={submit} className="flex flex-col gap-4 p-5" noValidate>
-        <Field label="Question" name="question" autoFocus placeholder="What was revenue in Q3?" />
-        <Field
-          label="Expected answer"
-          name="ground_truth"
-          multiline
-          placeholder="Revenue was $4.2M, up 12% on Q2."
-          hint="What a correct answer says, based only on the documents."
-        />
+        <Field label="Question" name="question" autoFocus hint="Ask it the way a user would." />
+        <Field label="Expected answer" name="ground_truth" multiline hint="What a correct answer says, based only on the documents." />
         <label className="flex flex-col gap-1.5">
           <span className="text-[13px] font-medium">Source document (optional)</span>
           <select name="source_doc" defaultValue="" className="h-10 rounded-xl border border-input bg-background px-3 text-[14px] outline-none focus:border-brand">

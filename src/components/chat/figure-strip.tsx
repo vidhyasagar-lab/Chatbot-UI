@@ -46,6 +46,7 @@ export function FigureStrip({ figures }: { figures: Figure[] }) {
                   src={figureUrl(f.path)}
                   alt={caption}
                   loading="lazy"
+                  decoding="async"
                   onError={() => setBroken((b) => new Set(b).add(f.path))}
                   className="size-full object-contain p-1.5 transition-transform duration-500 ease-spring group-hover:scale-[1.03]"
                 />

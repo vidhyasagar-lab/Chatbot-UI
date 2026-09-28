@@ -17,8 +17,26 @@ type Props = {
 export function HistoryList({ state, activeId, onOpen, onDeleted }: Props) {
   const groups = useMemo(() => groupSessions(state.sessions ?? []), [state.sessions]);
 
+  if (state.loadError) {
+    return (
+      <div role="alert" className="flex flex-col items-start gap-2 px-3 text-[12.5px] text-err">
+        {state.loadError}
+        <button
+          type="button"
+          onClick={state.retryLoad}
+          className="rounded-md border border-hair-strong px-2.5 py-1 text-[12.5px] text-foreground transition-colors hover:bg-shell pointer-coarse:py-2"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
   if (state.sessions === null) {
-    return <p className="px-3 text-[12.5px] text-faint">Loading chats…</p>;
+    return (
+      <p role="status" className="px-3 text-[12.5px] text-faint">
+        Loading chats…
+      </p>
+    );
   }
   if (state.sessions.length === 0) {
     return <p className="px-3 text-[12.5px] leading-relaxed text-faint">Your chats will appear here.</p>;
@@ -26,11 +44,6 @@ export function HistoryList({ state, activeId, onOpen, onDeleted }: Props) {
 
   return (
     <nav aria-label="Chat history" className="flex flex-col gap-4">
-      {state.error && (
-        <p role="alert" className="px-3 text-[12px] text-err">
-          {state.error}
-        </p>
-      )}
       {groups.map((g) => (
         <section key={g.label} className="flex flex-col gap-0.5">
           <h3 className="px-3 pb-1 text-[11px] font-medium uppercase tracking-[0.12em] text-faint">{g.label}</h3>
@@ -97,7 +110,7 @@ function HistoryItem({
             if (e.key === "Escape") finish(false, "");
           }}
           onBlur={(e) => finish(true, e.currentTarget.value)}
-          className="block w-full rounded-lg border border-brand bg-core px-3 py-1 text-[13.5px] outline-none shadow-[0_0_0_3px_var(--brand-soft)]"
+          className="block w-full rounded-lg border border-brand bg-core px-3 py-1 text-[13.5px] outline-none shadow-[0_0_0_3px_var(--brand-soft)] pointer-coarse:py-2"
         />
       </li>
     );
@@ -111,14 +124,14 @@ function HistoryItem({
           type="button"
           autoFocus
           onClick={onDelete}
-          className="rounded-md px-2 py-0.5 font-medium text-err transition-colors hover:bg-err-soft"
+          className="rounded-md px-2 py-0.5 font-medium text-err transition-colors hover:bg-err-soft pointer-coarse:py-2"
         >
           Delete
         </button>
         <button
           type="button"
           onClick={() => setConfirming(false)}
-          className="rounded-md px-2 py-0.5 text-muted-foreground transition-colors hover:bg-shell"
+          className="rounded-md px-2 py-0.5 text-muted-foreground transition-colors hover:bg-shell pointer-coarse:py-2"
         >
           Keep
         </button>
@@ -134,7 +147,8 @@ function HistoryItem({
         aria-current={active ? "page" : undefined}
         title={title}
         className={cn(
-          "block w-full truncate rounded-lg py-1.5 pl-3 pr-3 text-left text-[13.5px] transition-[color,background-color,padding] group-focus-within:pr-16 group-hover:pr-16",
+          // Phones show the row actions all the time, so the title always leaves room for them.
+          "block w-full truncate rounded-lg py-1.5 pl-3 pr-3 text-left text-[13.5px] transition-[color,background-color,padding] group-focus-within:pr-16 group-hover:pr-16 max-md:pr-16 pointer-coarse:py-3 pointer-coarse:pr-24",
           active ? "bg-core font-medium text-foreground shadow-[0_0_0_1px_var(--hair)]" : "text-muted-foreground hover:bg-shell hover:text-foreground",
         )}
       >
@@ -147,7 +161,7 @@ function HistoryItem({
           onClick={startEditing}
           aria-label={`Rename chat: ${title}`}
           title="Rename chat"
-          className="grid size-7 place-items-center rounded-md text-faint transition-colors hover:text-foreground"
+          className="grid size-7 place-items-center rounded-md text-faint transition-colors hover:text-foreground pointer-coarse:size-10"
         >
           <PencilSimple weight="regular" className="size-3.5" />
         </button>
@@ -156,7 +170,7 @@ function HistoryItem({
           onClick={() => setConfirming(true)}
           aria-label={`Delete chat: ${title}`}
           title="Delete chat"
-          className="grid size-7 place-items-center rounded-md text-faint transition-colors hover:text-err"
+          className="grid size-7 place-items-center rounded-md text-faint transition-colors hover:text-err pointer-coarse:size-10"
         >
           <Trash weight="regular" className="size-3.5" />
         </button>

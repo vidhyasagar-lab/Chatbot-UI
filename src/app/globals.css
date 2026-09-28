@@ -193,6 +193,19 @@
   --tw-ring-shadow: 0 0 #0000;
 }
 
+/*
+ * iOS zooms the page into any focused field under 16px and leaves it zoomed.
+ * On touch screens every field is at least 16px. Unlayered on purpose: it has
+ * to beat the text-[13px]-style utilities on individual inputs.
+ */
+@media (pointer: coarse) {
+  input:not([type="checkbox"], [type="radio"], [type="range"]),
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -200,6 +213,15 @@
   html {
     @apply font-sans;
     -webkit-text-size-adjust: 100%;
+  }
+  /*
+   * No page ever scrolls sideways. clip, not hidden: it creates no scroll
+   * container, so position: sticky keeps working and nothing traps wheel
+   * or touch scrolling. Wide content (tables, code) scrolls inside its own box.
+   */
+  html,
+  body {
+    overflow-x: clip;
   }
   body {
     @apply text-foreground;
@@ -237,6 +259,75 @@
   :focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 3px;
+  }
+}
+
+/*
+ * Data tables that become stacked cards on phones. Below 48rem each row is a
+ * card and each cell a "label · value" line, the label read from the cell's
+ * data-label. The cell marked data-primary (the row's name) leads the card at
+ * full width; cells with data-mobile-hidden are dropped; a cell with neither
+ * label nor primary holds actions and aligns right. One <table> in the markup,
+ * so desktop keeps real table semantics and nothing is rendered twice.
+ * !important because Tailwind utilities (px-5, min-w-[640px]) outrank this layer.
+ */
+@layer components {
+  @media (width < 48rem) {
+    .stack-table {
+      display: block;
+      min-width: 0 !important;
+    }
+    .stack-table thead {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+    .stack-table tbody {
+      display: block;
+    }
+    .stack-table tr {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      padding: 0.9rem 1rem;
+    }
+    .stack-table td {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      min-width: 0;
+      max-width: none !important;
+      padding: 0 !important;
+      text-align: left !important;
+      white-space: normal !important;
+    }
+    .stack-table td[data-label]::before {
+      content: attr(data-label);
+      flex-shrink: 0;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--faint);
+    }
+    .stack-table td:not([data-label]) {
+      justify-content: flex-end;
+    }
+    .stack-table td[data-primary] {
+      display: block;
+      order: -1;
+      padding-bottom: 0.2rem !important;
+    }
+    .stack-table td[data-mobile-hidden] {
+      display: none;
+    }
+    .stack-table td[colspan] {
+      display: block;
+    }
   }
 }
 

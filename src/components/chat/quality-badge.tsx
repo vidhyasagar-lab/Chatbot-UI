@@ -69,7 +69,18 @@ export function QualityBadge({ gated, traceId }: { gated?: EvalScores; traceId?:
   }, [open]);
 
   if (!scores) {
-    if (gaveUp || !traceId) return null;
+    if (!traceId) return null;
+    if (gaveUp) {
+      return (
+        <span
+          title="The quality check didn't finish in time. The answer still cites its sources."
+          className="inline-flex items-center gap-1.5 rounded-full bg-shell px-2.5 py-1 text-xs text-faint"
+        >
+          <SealWarning weight="regular" className="size-3.5" />
+          Score unavailable
+        </span>
+      );
+    }
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-shell px-2.5 py-1 text-xs text-faint">
         <CircleNotch weight="regular" className="size-3.5 animate-spin" />
@@ -101,7 +112,7 @@ export function QualityBadge({ gated, traceId }: { gated?: EvalScores; traceId?:
         aria-label="Answer quality scores"
         inert={!open}
         className={cn(
-          "paper absolute bottom-[calc(100%+0.6rem)] left-0 z-20 w-72 origin-bottom-left rounded-xl transition-[opacity,transform] duration-500 ease-spring",
+          "paper absolute bottom-[calc(100%+0.6rem)] left-0 z-20 w-[min(18rem,calc(100vw-2rem))] origin-bottom-left rounded-xl transition-[opacity,transform] duration-500 ease-spring",
           open ? "opacity-100" : "pointer-events-none translate-y-1.5 scale-[0.98] opacity-0",
         )}
       >
