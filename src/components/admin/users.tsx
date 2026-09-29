@@ -186,11 +186,14 @@ function CreateUser({ onCancel, onCreated }: { onCancel: () => void; onCreated: 
     const username = String(form.get("username") ?? "").trim();
     const password = String(form.get("password") ?? "");
     if (!username) {
-      setError("Enter a username.");
+      setError("Enter an email address.");
       return;
     }
-    if (!/^[\w\-. ]+$/.test(username)) {
-      setError("Usernames can use letters, numbers, spaces, dots, dashes and underscores.");
+    // People sign themselves up with an address, and an account without one
+    // cannot be sent a sign-in code. Plain names are still allowed here for
+    // service accounts, which never sign in by email.
+    if (!/^[\w\-.+@ ]+$/.test(username)) {
+      setError("Use an email address, or a name of letters, numbers, dots, dashes and underscores.");
       return;
     }
     if (password.length < 8) {
@@ -225,7 +228,7 @@ function CreateUser({ onCancel, onCreated }: { onCancel: () => void; onCreated: 
         }
       />
       <form onSubmit={submit} className="grid grid-cols-[1fr_1fr_auto] items-end gap-4 p-5 max-md:grid-cols-1" noValidate>
-        <Field label="Username" name="username" autoComplete="off" autoFocus hint="Letters, numbers, spaces, dots, dashes, underscores." />
+        <Field label="Email address" name="username" autoComplete="off" autoFocus hint="They sign in with this, by password or by emailed code." />
         <Field label="Temporary password" name="password" type="password" autoComplete="new-password" hint="At least 8 characters. Share it privately." />
         <div className="flex flex-col gap-1.5 pb-[22px] max-md:pb-0">
           <span className="text-[13px] font-medium">Role</span>
