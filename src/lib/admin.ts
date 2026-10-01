@@ -75,14 +75,37 @@ export type LangfuseTrace = {
   created_at: string;
   total_cost: number;
   latency: number; // seconds
-  usage: { input: number; output: number; total: number };
+  /**
+   * Tokens spent under this trace, or null when Langfuse could not say.
+   *
+   * A trace itself carries no usage; the backend attributes this from the
+   * observations beneath it, in one grouped query for the whole page. Null
+   * and 0 are different answers: 0 means the question really was free, as
+   * small talk is, while null means a rate limit or a trace past the row
+   * limit of that query.
+   */
+  tokens: number | null;
 };
 
 export type LangfuseTraces = { traces: LangfuseTrace[]; total: number; message?: string; error?: string };
 
 export type LangfuseSummary =
   | { enabled: false }
-  | { enabled: true; trace_count?: number; total_cost?: number; total_tokens?: number; error?: string };
+  | { enabled: true; trace_count?: number; total_cost?: number; total_tokens?: number; days?: number; error?: string };
+
+/** One row of GET /admin/langfuse/by-user. */
+export type UserUsage = {
+  user_id: string;
+  /** The address, or a marker when the account is gone or the trace had no user. */
+  username: string;
+  role: string;
+  /** Questions asked, counted from the traces in the window. */
+  traces: number;
+  tokens: number;
+  cost: number;
+};
+
+export type LangfuseByUser = { enabled: boolean; users: UserUsage[]; error?: string };
 
 /** A string field from a Python dict repr, whichever quote style repr chose for it. */
 function reprField(repr: string, key: string): string | null {

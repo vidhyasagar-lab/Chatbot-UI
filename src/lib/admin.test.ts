@@ -63,6 +63,16 @@ describe("formatNumber", () => {
   it("shows a dash for a missing value", () => {
     expect(formatNumber(undefined)).toBe("—");
   });
+
+  // The trace table's token column leans on this distinction. Langfuse
+  // returns null when it could not say - a rate limit, or a trace past the
+  // row limit of the grouped query - and 0 when the answer really was free,
+  // which small talk is, since it never reaches a model. Narrowing the
+  // guard to `!n` would collapse the two and bill a greeting as unknown.
+  it("tells a real zero apart from a count it could not get", () => {
+    expect(formatNumber(0)).toBe("0");
+    expect(formatNumber(null)).toBe("—");
+  });
 });
 
 describe("scoreTone", () => {
