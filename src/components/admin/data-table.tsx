@@ -7,10 +7,13 @@ import { cn } from "@/lib/utils";
  * The pieces the admin tables share: a sort that can be clicked off again, a
  * sortable header, and pagination controls.
  *
- * Two tables, two kinds of sorting, deliberately. The traces list is paginated
- * by Langfuse, so its sort has to go to the server - sorting the twenty rows on
- * screen would be a lie about the other ninety-nine. The per-user table arrives
- * whole in one response, so it sorts here.
+ * Both tables sort and page in the browser, because both arrive whole. The
+ * usage endpoint returns the entire window in one response - two reads of
+ * Langfuse's observations API - so a table orders rows it actually holds.
+ * While the trace list was paginated by the service, sorting the twenty rows
+ * on screen would have been a claim about the other ninety-nine, which is
+ * why the sort used to be sent to the server and why only the two columns
+ * Langfuse would order by could be sorted at all.
  */
 
 export type SortDir = "asc" | "desc";
@@ -28,27 +31,23 @@ export function nextSort(current: Sort, field: string): Sort {
   return null;
 }
 
-/** Langfuse spells its ordering "field.direction". */
-export function orderByParam(sort: Sort): string {
-  return sort ? `${sort.field}.${sort.dir}` : "";
+/** How many pages `total` rows fill. Never zero, so the pager reads "of 1". */
+export function pageCount(total: number, limit: number): number {
+  return Math.max(1, Math.ceil(total / Math.max(1, limit)));
 }
 
-/** The query string for GET /admin/langfuse/traces. */
-export function tracesQuery(opts: {
-  page: number;
-  limit: number;
-  userId?: string;
-  name?: string;
-  sort: Sort;
-}): string {
-  const params = new URLSearchParams({ page: String(opts.page), limit: String(opts.limit) });
-  // Set, never sent empty: Langfuse reads user_id="" as a real id that
-  // matches nothing, which would blank an unfiltered page.
-  if (opts.userId) params.set("user_id", opts.userId);
-  if (opts.name) params.set("name", opts.name);
-  const order = orderByParam(opts.sort);
-  if (order) params.set("order_by", order);
-  return params.toString();
+/**
+ * The slice of `rows` belonging to `page`.
+ *
+ * A page past the end gives the last page rather than nothing: narrowing a
+ * filter while on page 4 would otherwise strand the reader on an empty slice
+ * of a list that does have rows.
+ */
+export function pageOf<T>(rows: T[], page: number, limit: number): T[] {
+  const size = Math.max(1, limit);
+  const last = pageCount(rows.length, size);
+  const current = Math.min(Math.max(1, page), last);
+  return rows.slice((current - 1) * size, current * size);
 }
 
 /** Compare one field of two rows: numbers numerically, text case-insensitively. */

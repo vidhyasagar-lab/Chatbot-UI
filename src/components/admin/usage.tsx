@@ -3,9 +3,8 @@
 import { MagnifyingGlass, X } from "@phosphor-icons/react";
 import { Fragment, useState } from "react";
 import {
-  type LangfuseByUser,
-  type LangfuseSummary,
-  type LangfuseTraces,
+  type LangfuseTrace,
+  type LangfuseUsage,
   type UserUsage,
   formatCost,
   formatLatency,
@@ -22,44 +21,51 @@ import {
   SortHeader,
   ariaSort,
   nextSort,
+  pageCount,
+  pageOf,
   shareOf,
   sortRows,
-  tracesQuery,
 } from "./data-table";
 import { Badge, Empty, ErrorNote, Loading, PageHeader, Panel, PanelHeader } from "./ui";
 
 /*
- * Two tables, sorted two different ways on purpose.
+ * One request serves this whole page, and both tables sort, filter and page
+ * in the browser.
  *
- * "Cost by user" arrives whole in one response, so it sorts in the browser.
- * The trace list is paginated by Langfuse, so its sort and its filters are
- * sent to the server - sorting the twenty rows on screen would claim an
- * order over the other ninety-nine that it does not have.
+ * That is a deliberate reversal. The trace list used to be paginated by
+ * Langfuse, so its sort and its filters had to be sent to the server -
+ * ordering the twenty rows on screen would have claimed an order over the
+ * other ninety-nine - and only the two columns Langfuse would order by could
+ * be sorted at all. But reading traces that way cost three requests against
+ * an endpoint that allows five a minute, plus three against a metrics API
+ * that allows a hundred a day, so the page could not be opened twice in a
+ * minute. The backend now takes two reads of Langfuse's observations API and
+ * returns the entire window, so every row the table orders is a row it
+ * holds, and every column can be sorted honestly.
  */
+
+type Sorted = Record<string, unknown>;
 
 export function Usage() {
   const [days] = useState(30);
-  const summary = useAdminData<LangfuseSummary>(`/langfuse/summary?days=${days}`);
-  const byUser = useAdminData<LangfuseByUser>(`/langfuse/by-user?days=${days}`);
+  const usage = useAdminData<LangfuseUsage>(`/langfuse/usage?days=${days}`);
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [userId, setUserId] = useState("");
   const [search, setSearch] = useState("");
-  // Seeded with the order Langfuse already serves, so the When header shows
-  // the state it is actually in and the first click flips it. Left null, the
-  // first click asked for timestamp.desc - which is the default - and
-  // nothing on screen moved.
-  const [sort, setSort] = useState<Sort>({ field: "timestamp", dir: "desc" });
+  // Seeded with the order the rows arrive in, so the When header shows the
+  // state it is actually in and the first click flips it. Left null, the
+  // first click asked for newest-first - which it already was - and nothing
+  // on screen moved.
+  const [sort, setSort] = useState<Sort>({ field: "created_at", dir: "desc" });
   const [userSort, setUserSort] = useState<Sort>(null);
   const [openId, setOpenId] = useState<string | null>(null);
 
-  const traces = useAdminData<LangfuseTraces>(`/langfuse/traces?${tracesQuery({ page, limit, userId, sort })}`);
-
-  // Anything that changes what is being asked for goes back to the first
+  // Anything that changes which rows are on screen goes back to the first
   // page: staying on page 4 of a filter with one page of results shows an
   // empty table. Done in the handlers rather than an effect, which would
-  // fetch page 4 of the new query first and then fetch again after resetting.
+  // render page 4 of the new list before resetting.
   const filterByUser = (id: string) => {
     setUserId(id);
     setPage(1);
@@ -68,27 +74,32 @@ export function Usage() {
     setLimit(n);
     setPage(1);
   };
+  const changeSearch = (text: string) => {
+    setSearch(text);
+    setPage(1);
+  };
   const sortTraces = (field: string) => {
     setSort(nextSort(sort, field));
     setPage(1);
   };
 
-  const s = summary.data;
-  const notConfigured = (s && !s.enabled) || Boolean(traces.data?.message);
-  const pages = traces.data ? Math.max(1, Math.ceil(traces.data.total / limit)) : 1;
-
-  const users = byUser.data?.users ?? [];
-  const totalCost = users.reduce((sum, u) => sum + u.cost, 0);
+  const data = usage.data;
+  const notConfigured = data && !data.enabled;
+  const users = data?.users ?? [];
+  const totalCost = data?.totals.cost ?? 0;
   const selected = users.find((u) => u.user_id === userId);
-  // The filter can be set from a row whose user is not in the current window.
   const filterLabel = selected?.username || userId;
 
-  const rows = traces.data?.traces ?? [];
-  const visible = search.trim()
-    ? rows.filter((t) =>
-        `${traceTitle(t.input, t.name)} ${t.name} ${t.tags.join(" ")}`.toLowerCase().includes(search.trim().toLowerCase()),
-      )
-    : rows;
+  const all = data?.traces ?? [];
+  const term = search.trim().toLowerCase();
+  const matching = all.filter((t) => {
+    if (userId && t.user_id !== userId) return false;
+    if (!term) return true;
+    return `${traceTitle(t.input, t.name)} ${t.name} ${t.username} ${t.tags.join(" ")}`.toLowerCase().includes(term);
+  });
+  const ordered = sortRows(matching as unknown as Sorted[], sort) as unknown as LangfuseTrace[];
+  const pages = pageCount(ordered.length, limit);
+  const visible = pageOf(ordered, page, limit);
 
   return (
     <>
@@ -98,7 +109,7 @@ export function Usage() {
         description={`Token use, spend and latency from Langfuse, which traces every question Verity answers. Last ${days} days.`}
       />
 
-      {summary.error && <ErrorNote message={summary.error} onRetry={summary.reload} />}
+      {usage.error && <ErrorNote message={usage.error} onRetry={usage.reload} />}
 
       {notConfigured ? (
         <Panel className="animate-rise">
@@ -110,11 +121,26 @@ export function Usage() {
       ) : (
         <>
           <div className="grid grid-cols-3 gap-4 max-md:grid-cols-1">
-            <Stat label={`Spend · last ${days} days`} value={s?.enabled ? formatCost(s.total_cost) : "—"} delay={0} />
-            <Stat label={`Tokens · last ${days} days`} value={s?.enabled ? formatNumber(s.total_tokens) : "—"} delay={60} />
-            <Stat label="Traces recorded" value={traces.data ? formatNumber(traces.data.total) : "—"} delay={120} />
+            <Stat label={`Spend · last ${days} days`} value={data ? formatCost(data.totals.cost) : "—"} delay={0} />
+            <Stat label={`Tokens · last ${days} days`} value={data ? formatNumber(data.totals.tokens) : "—"} delay={60} />
+            <Stat label="Questions asked" value={data ? formatNumber(data.totals.traces) : "—"} delay={120} />
           </div>
-          {s?.enabled && s.error && <ErrorNote message={`Langfuse returned an error: ${s.error}`} onRetry={summary.reload} />}
+
+          {data?.error && (
+            <ErrorNote message={`Langfuse returned an error: ${data.error}`} onRetry={usage.reload} />
+          )}
+
+          {/*
+            Said plainly rather than left implied: beyond this many rows the
+            snapshot stops reading, and figures built from part of the window
+            must not be read as the whole bill.
+          */}
+          {data?.truncated && (
+            <Panel className="animate-rise px-5 py-4 text-[13px] text-muted-foreground">
+              This window holds more traces than one snapshot reads, so these totals cover only the most recent of them. Narrow the window
+              to see a complete picture.
+            </Panel>
+          )}
 
           {/* ── Cost by user ──────────────────────────────────────── */}
           <Panel className="animate-rise overflow-hidden">
@@ -122,16 +148,8 @@ export function Usage() {
               title="Cost by user"
               meta={users.length ? `${users.length} ${users.length === 1 ? "user" : "users"}` : undefined}
             />
-            {byUser.loading && !byUser.data ? (
+            {usage.loading && !data ? (
               <Loading />
-            ) : byUser.error ? (
-              <div className="p-5">
-                <ErrorNote message={byUser.error} onRetry={byUser.reload} />
-              </div>
-            ) : byUser.data?.error ? (
-              <div className="p-5">
-                <ErrorNote message={`Langfuse returned an error: ${byUser.data.error}`} onRetry={byUser.reload} />
-              </div>
             ) : !users.length ? (
               <Empty title="Nothing spent yet">Usage appears here once questions have been answered.</Empty>
             ) : (
@@ -155,8 +173,7 @@ export function Usage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sortRows(users as unknown as Record<string, unknown>[], userSort).map((raw) => {
-                      const u = raw as unknown as UserUsage;
+                    {(sortRows(users as unknown as Sorted[], userSort) as unknown as UserUsage[]).map((u) => {
                       const picked = u.user_id === userId;
                       const canFilter = Boolean(u.user_id);
                       return (
@@ -216,11 +233,11 @@ export function Usage() {
           <Panel className="animate-rise overflow-hidden">
             <PanelHeader
               title="Traces"
-              meta={traces.data ? `Page ${page} of ${pages}` : undefined}
+              meta={data ? `Page ${Math.min(page, pages)} of ${pages}` : undefined}
               actions={
                 <div className="flex items-center gap-2">
                   <PageSize value={limit} onChange={changeLimit} />
-                  <Pager page={page} pages={pages} busy={traces.loading} onPage={setPage} />
+                  <Pager page={page} pages={pages} busy={usage.loading} onPage={setPage} />
                 </div>
               }
             />
@@ -230,9 +247,9 @@ export function Usage() {
                 <MagnifyingGlass weight="regular" className="pointer-events-none absolute left-3 size-4 text-faint" />
                 <input
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search questions on this page"
-                  aria-label="Search questions on this page"
+                  onChange={(e) => changeSearch(e.target.value)}
+                  placeholder="Search questions and users"
+                  aria-label="Search questions and users"
                   className="h-9 w-full rounded-lg border border-hair bg-core pl-9 pr-3 text-[13px] outline-none transition-colors focus:border-brand pointer-coarse:h-11"
                 />
               </label>
@@ -249,46 +266,42 @@ export function Usage() {
               )}
             </div>
 
-            {traces.loading && !traces.data ? (
+            {usage.loading && !data ? (
               <Loading />
-            ) : traces.error ? (
-              <div className="p-5">
-                <ErrorNote message={traces.error} onRetry={traces.reload} />
-              </div>
-            ) : traces.data?.error ? (
-              <div className="p-5">
-                <ErrorNote message={`Langfuse returned an error: ${traces.data.error}`} onRetry={traces.reload} />
-              </div>
             ) : !visible.length ? (
-              <Empty title={rows.length ? "Nothing matches that search" : "No traces yet"}>
-                {rows.length
-                  ? "Clear the search to see this page again."
-                  : userId
-                    ? "This user hasn't asked anything in this window."
-                    : "Ask Verity a question and it will show up here."}
+              <Empty title={all.length ? "Nothing matches that" : "No traces yet"}>
+                {all.length
+                  ? "Clear the search or the user filter to see the full list again."
+                  : "Ask Verity a question and it will show up here."}
               </Empty>
             ) : (
               <div className="overflow-x-auto">
-                <table className="stack-table w-full min-w-[800px] text-left text-[13.5px]">
+                <table className="stack-table w-full min-w-[820px] text-left text-[13.5px]">
                   <thead>
                     <tr className="border-b border-hair text-[11.5px] uppercase tracking-[0.1em] text-faint">
-                      <SortHeader field="timestamp" sort={sort} onSort={sortTraces} className="px-5">
+                      <SortHeader field="created_at" sort={sort} onSort={sortTraces} className="px-5">
                         When
                       </SortHeader>
                       <SortHeader field="name" sort={sort} onSort={sortTraces}>
                         Trace
                       </SortHeader>
                       {/*
-                        Tokens, cost and latency are not sortable, and
-                        deliberately offer no affordance saying they are:
-                        Langfuse rejects them as an order-by column, and
-                        sorting only the page on screen would claim an order
-                        over the other pages that it does not have. To rank
-                        by spend, use the panel above - it holds every row.
+                        Every column sorts now. While Langfuse paginated this
+                        list these three could not: it rejects totalCost and
+                        latency as an order-by column, and ordering only the
+                        page on screen would have claimed an order over the
+                        pages it had never seen. The table holds the whole
+                        window, so the claim is now true.
                       */}
-                      <th className="px-3 py-2.5 text-right font-medium">Tokens</th>
-                      <th className="px-3 py-2.5 text-right font-medium">Cost</th>
-                      <th className="px-5 py-2.5 text-right font-medium">Latency</th>
+                      <SortHeader field="tokens" sort={sort} onSort={sortTraces} align="right">
+                        Tokens
+                      </SortHeader>
+                      <SortHeader field="total_cost" sort={sort} onSort={sortTraces} align="right">
+                        Cost
+                      </SortHeader>
+                      <SortHeader field="latency" sort={sort} onSort={sortTraces} align="right" className="px-5">
+                        Latency
+                      </SortHeader>
                     </tr>
                   </thead>
                   <tbody>
@@ -300,7 +313,7 @@ export function Usage() {
                             onClick={() => setOpenId(open ? null : t.id)}
                             className={cn("cursor-pointer border-b border-hair transition-colors hover:bg-shell", open && "bg-shell")}
                           >
-                            <td data-label="When" className="whitespace-nowrap px-5 py-3 text-muted-foreground">
+                            <td data-label="When" className="whitespace-nowrap px-5 py-3 text-muted-foreground" aria-sort={ariaSort(sort, "created_at")}>
                               {formatWhen(t.created_at)}
                             </td>
                             <td data-primary className="max-w-[320px] px-3 py-3">
@@ -322,11 +335,9 @@ export function Usage() {
                               </span>
                             </td>
                             {/*
-                              formatNumber draws null as an em dash and 0 as
-                              "0", which is the distinction that matters
-                              here: small talk never reaches a model and
-                              really did cost nothing, while null means
-                              Langfuse could not say.
+                              A real 0 is drawn as "0", not a dash: the
+                              question never reached a model, which small talk
+                              does not, so it genuinely was free.
                             */}
                             <td data-label="Tokens" className="whitespace-nowrap px-3 py-3 text-right font-mono text-[12.5px] text-muted-foreground">
                               {formatNumber(t.tokens)}
@@ -357,7 +368,7 @@ export function Usage() {
                                       }}
                                       className="underline decoration-hair-strong underline-offset-4 transition-colors hover:text-foreground"
                                     >
-                                      only this user
+                                      only {t.username}
                                     </button>
                                   )}
                                 </div>
@@ -392,7 +403,7 @@ function TraceText({ label, children }: { label: string; children: string }) {
     <div className="rounded-xl border border-hair bg-core p-4">
       <p className="text-[11.5px] font-medium uppercase tracking-[0.12em] text-faint">{label}</p>
       <p className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap text-[13px] leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
-        {children || "Nothing recorded."}
+        {children || "—"}
       </p>
     </div>
   );

@@ -68,6 +68,8 @@ export type LangfuseTrace = {
   id: string;
   name: string;
   user_id: string;
+  /** Resolved by the backend, so the table never has to show a hex id. */
+  username: string;
   session_id: string;
   input: string;
   output: string;
@@ -76,24 +78,16 @@ export type LangfuseTrace = {
   total_cost: number;
   latency: number; // seconds
   /**
-   * Tokens spent under this trace, or null when Langfuse could not say.
+   * Tokens spent under this trace.
    *
-   * A trace itself carries no usage; the backend attributes this from the
-   * observations beneath it, in one grouped query for the whole page. Null
-   * and 0 are different answers: 0 means the question really was free, as
-   * small talk is, while null means a rate limit or a trace past the row
-   * limit of that query.
+   * Summed by the backend from the generations beneath the trace, since the
+   * root span carries no usage at all. A real 0 means the question never
+   * reached a model, which small talk does not, so it genuinely was free.
    */
-  tokens: number | null;
+  tokens: number;
 };
 
-export type LangfuseTraces = { traces: LangfuseTrace[]; total: number; message?: string; error?: string };
-
-export type LangfuseSummary =
-  | { enabled: false }
-  | { enabled: true; trace_count?: number; total_cost?: number; total_tokens?: number; days?: number; error?: string };
-
-/** One row of GET /admin/langfuse/by-user. */
+/** One row of GET /admin/langfuse/usage's `users`. */
 export type UserUsage = {
   user_id: string;
   /** The address, or a marker when the account is gone or the trace had no user. */
@@ -105,7 +99,28 @@ export type UserUsage = {
   cost: number;
 };
 
-export type LangfuseByUser = { enabled: boolean; users: UserUsage[]; error?: string };
+/**
+ * GET /admin/langfuse/usage - the whole page in one response.
+ *
+ * This replaced four endpoints. Each made its own Langfuse calls, and
+ * together they spent three requests against the trace API, which allows
+ * five a minute, plus three against the metrics API, which allows a hundred
+ * a day. The page could not be opened twice in a minute.
+ *
+ * The whole window arrives at once, which is what lets both tables sort and
+ * page in the browser over rows they actually hold. `truncated` says when
+ * the window outgrew a single snapshot, so the figures can be labelled
+ * partial instead of being read as the whole bill.
+ */
+export type LangfuseUsage = {
+  enabled: boolean;
+  traces: LangfuseTrace[];
+  users: UserUsage[];
+  totals: { cost: number; tokens: number; traces: number };
+  truncated: boolean;
+  days: number;
+  error?: string;
+};
 
 /** A string field from a Python dict repr, whichever quote style repr chose for it. */
 function reprField(repr: string, key: string): string | null {

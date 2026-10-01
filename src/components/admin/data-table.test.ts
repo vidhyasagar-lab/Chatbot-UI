@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compareRows, nextSort, orderByParam, shareOf, sortRows, tracesQuery } from "./data-table";
+import { compareRows, nextSort, pageCount, pageOf, shareOf, sortRows } from "./data-table";
 
 describe("shareOf", () => {
   it("gives the fraction one value is of the total", () => {
@@ -46,45 +46,38 @@ describe("nextSort", () => {
   });
 });
 
-describe("orderByParam", () => {
-  it("spells the sort the way Langfuse wants it", () => {
-    expect(orderByParam({ field: "totalCost", dir: "desc" })).toBe("totalCost.desc");
-    expect(orderByParam({ field: "timestamp", dir: "asc" })).toBe("timestamp.asc");
+// Paging happens here now, not at Langfuse. The usage endpoint returns the
+// whole window in one response - two reads of the observations API - so the
+// table holds every row it claims an order over. While the trace list was
+// paginated by the service, sorting the rows on screen would have been a
+// claim about the pages it had never seen.
+describe("pageOf", () => {
+  const rows = Array.from({ length: 45 }, (_, i) => ({ id: i }));
+
+  it("returns the slice belonging to the page asked for", () => {
+    expect(pageOf(rows, 1, 20).map((r) => r.id)).toEqual(Array.from({ length: 20 }, (_, i) => i));
+    expect(pageOf(rows, 2, 20)[0].id).toBe(20);
   });
 
-  it("sends nothing when no column is sorted", () => {
-    expect(orderByParam(null)).toBe("");
-  });
-});
-
-describe("tracesQuery", () => {
-  it("always carries the page and the page size", () => {
-    const q = new URLSearchParams(tracesQuery({ page: 2, limit: 50, sort: null }));
-    expect(q.get("page")).toBe("2");
-    expect(q.get("limit")).toBe("50");
+  it("returns the remainder on the last page", () => {
+    expect(pageOf(rows, 3, 20)).toHaveLength(5);
   });
 
-  it("omits filters that are not set, rather than sending empty ones", () => {
-    // An empty user_id means "a user whose id is empty" to Langfuse, which
-    // matches nothing, so an unfiltered page would come back blank.
-    const q = new URLSearchParams(tracesQuery({ page: 1, limit: 20, sort: null }));
-    expect(q.has("user_id")).toBe(false);
-    expect(q.has("name")).toBe(false);
-    expect(q.has("order_by")).toBe(false);
+  it("counts the pages the rows actually fill", () => {
+    expect(pageCount(45, 20)).toBe(3);
+    expect(pageCount(40, 20)).toBe(2);
   });
 
-  it("carries the filters that are set", () => {
-    const q = new URLSearchParams(
-      tracesQuery({ page: 1, limit: 20, userId: "u1", name: "rag-chat", sort: { field: "latency", dir: "asc" } }),
-    );
-    expect(q.get("user_id")).toBe("u1");
-    expect(q.get("name")).toBe("rag-chat");
-    expect(q.get("order_by")).toBe("latency.asc");
+  // An empty result still occupies one page, so the pager reads "Page 1 of 1"
+  // rather than "Page 1 of 0".
+  it("reports one page when there is nothing to show", () => {
+    expect(pageCount(0, 20)).toBe(1);
   });
 
-  it("escapes a value that would otherwise break the query string", () => {
-    const q = new URLSearchParams(tracesQuery({ page: 1, limit: 20, userId: "a&b=c", sort: null }));
-    expect(q.get("user_id")).toBe("a&b=c");
+  // Narrowing a filter while on a later page would otherwise strand the
+  // reader on an empty slice of a list that does have rows.
+  it("gives the last page when the page asked for is past the end", () => {
+    expect(pageOf(rows, 9, 20).map((r) => r.id)).toEqual([40, 41, 42, 43, 44]);
   });
 });
 

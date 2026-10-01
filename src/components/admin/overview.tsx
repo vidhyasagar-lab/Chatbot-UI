@@ -7,7 +7,7 @@ import {
   type AdminStats,
   type EvalRun,
   type GoldenSample,
-  type LangfuseSummary,
+  type LangfuseUsage,
   formatCost,
   formatNumber,
   formatWhen,
@@ -21,7 +21,7 @@ export function Overview() {
   const stats = useAdminData<AdminStats>("/stats");
   const runs = useAdminData<EvalRun[]>("/evaluate/runs");
   const golden = useAdminData<GoldenSample[]>("/golden");
-  const usage = useAdminData<LangfuseSummary>("/langfuse/summary");
+  const usage = useAdminData<LangfuseUsage>("/langfuse/usage");
 
   const s = stats.data;
   const latest = runs.data?.[0];
@@ -113,7 +113,7 @@ export function Overview() {
         </Tile>
 
         <Tile href="/admin/usage" className="col-span-6 max-lg:col-span-3 max-md:col-span-1" delay={240}>
-          <TileLabel>Usage · last 100 traces</TileLabel>
+          <TileLabel>Usage · last 30 days</TileLabel>
           {usage.error ? (
             <p className="mt-4 text-[13px] text-err">Couldn&apos;t load usage from the server.</p>
           ) : usage.data && !usage.data.enabled ? (
@@ -122,10 +122,10 @@ export function Overview() {
             <p className="mt-4 text-[13px] text-err">Langfuse returned an error.</p>
           ) : (
             <>
-              <BigNumber>{usage.data?.enabled ? formatCost(usage.data.total_cost) : "—"}</BigNumber>
+              <BigNumber>{usage.data?.enabled ? formatCost(usage.data.totals.cost) : "—"}</BigNumber>
               <p className="text-[13px] text-muted-foreground">
                 {usage.data?.enabled
-                  ? `${formatNumber(usage.data.total_tokens)} tokens over ${formatNumber(usage.data.trace_count)} traces`
+                  ? `${formatNumber(usage.data.totals.tokens)} tokens over ${formatNumber(usage.data.totals.traces)} questions`
                   : "Loading…"}
               </p>
             </>
