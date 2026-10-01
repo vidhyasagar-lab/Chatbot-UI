@@ -97,6 +97,28 @@ async function errorFrom(res: Response): Promise<string> {
   return "Something went wrong. Try again.";
 }
 
+/**
+ * Where a submitted code goes, and with what.
+ *
+ * Both doors end at the same code box. With a password waiting, the person
+ * is signing up and the code is the proof of their address, so it goes to
+ * /auth/register and creates the account with that password. Without one,
+ * they are signing in and /auth/code/verify does it - creating the account
+ * if the address is new, which it has always done.
+ *
+ * Registration used to post without a code at all, which created an account
+ * from nothing but a request body.
+ */
+export function codeSubmission(
+  email: string,
+  code: string,
+  password: string,
+): { url: string; body: Record<string, string> } {
+  return password
+    ? { url: "/api/v1/auth/register", body: { username: email, password, code } }
+    : { url: "/api/v1/auth/code/verify", body: { email, code } };
+}
+
 export function AuthForm({ initialMode = "login" }: { initialMode?: Mode }) {
   const router = useRouter();
   const [door, setDoor] = useState<Door>("code");
@@ -112,6 +134,11 @@ export function AuthForm({ initialMode = "login" }: { initialMode?: Mode }) {
   // which only happens in development. Saying "check your inbox" then would
   // send someone looking for a message that was never sent.
   const [delivered, setDelivered] = useState(true);
+  // The password chosen on the sign-up form, held until the code proves the
+  // address. Non-empty here is what makes the code box register rather than
+  // sign in; cleared whenever the form changes what it is doing, so a
+  // half-finished sign-up cannot leak into a sign-in.
+  const [heldPassword, setHeldPassword] = useState("");
   const form = useRef<HTMLFormElement>(null);
   const codeInput = useRef<HTMLInputElement>(null);
   const copy = COPY[mode];
@@ -186,11 +213,12 @@ export function AuthForm({ initialMode = "login" }: { initialMode?: Mode }) {
 
     setPending(true);
     setError(null);
+    const { url, body } = codeSubmission(email.trim(), normaliseCode(code), heldPassword);
     try {
-      const res = await fetch("/api/v1/auth/code/verify", {
+      const res = await fetch(url, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), code: normaliseCode(code) }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         setError(await errorFrom(res));
@@ -222,11 +250,22 @@ export function AuthForm({ initialMode = "login" }: { initialMode?: Mode }) {
       return;
     }
 
+    setInvalid(null);
+
+    // Signing up asks for the code before the account exists: the address
+    // has to be proved, and the password is held until it is. The code box
+    // that opens here is the same one the other door uses.
+    if (mode === "register") {
+      setEmail(username);
+      setHeldPassword(password);
+      await requestCode(username);
+      return;
+    }
+
     setPending(true);
     setError(null);
-    setInvalid(null);
     try {
-      const res = await fetch(`/api/v1/auth/${mode}`, {
+      const res = await fetch("/api/v1/auth/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ username, password }),
@@ -236,7 +275,7 @@ export function AuthForm({ initialMode = "login" }: { initialMode?: Mode }) {
         setPending(false);
         return;
       }
-      finish(mode === "register" ? "Account created. Welcome to Verity." : "Welcome back.");
+      finish("Welcome back.");
     } catch {
       setError("Can't reach the server. Check your connection and try again.");
       setPending(false);
@@ -248,6 +287,11 @@ export function AuthForm({ initialMode = "login" }: { initialMode?: Mode }) {
     setMode(next);
     setError(null);
     setInvalid(null);
+    // Back to the start: a password held for a sign-up must not survive into
+    // a sign-in, where it would send the code to the wrong endpoint.
+    setStep("address");
+    setCode("");
+    setHeldPassword("");
     // Keep the address, and with it the page title, in step with the form on screen.
     router.replace(next === "register" ? "/login?mode=register" : "/login", { scroll: false });
   };
@@ -258,25 +302,26 @@ export function AuthForm({ initialMode = "login" }: { initialMode?: Mode }) {
     setError(null);
     setInvalid(null);
     setCode("");
+    setHeldPassword("");
   };
 
-  // Someone who arrived from "Create an account" should not be greeted with
-  // "Sign in", even though the code door does both with one form.
+  // The code box is shared, so the heading follows the step first and the
+  // door only when no code has been asked for.
   const heading =
-    door === "password"
-      ? copy.title
-      : step === "code"
-        ? "Check your email"
+    step === "code"
+      ? "Check your email"
+      : door === "password"
+        ? copy.title
         : mode === "register"
           ? "Create your account"
           : "Sign in";
   const sub =
-    door === "password"
-      ? copy.sub
-      : step === "code"
-        ? delivered
-          ? `We sent a ${CODE_LENGTH}-digit code to ${email.trim()}.`
-          : `Mail is not configured here, so the ${CODE_LENGTH}-digit code for ${email.trim()} is in the server log.`
+    step === "code"
+      ? delivered
+        ? `We sent a ${CODE_LENGTH}-digit code to ${email.trim()}.`
+        : `Mail is not configured here, so the ${CODE_LENGTH}-digit code for ${email.trim()} is in the server log.`
+      : door === "password"
+        ? copy.sub
         : mode === "register"
           ? "Enter your email and we'll send a code. That is the whole sign-up — there is no password to choose."
           : "Enter your email and we'll send you a code. No password needed.";
@@ -312,7 +357,9 @@ export function AuthForm({ initialMode = "login" }: { initialMode?: Mode }) {
           </form>
         )}
 
-        {door === "code" && step === "code" && (
+        {/* Shared by both doors: signing in by code, and proving the
+            address while signing up with a password. */}
+        {step === "code" && (
           <form onSubmit={submitCode} className="mt-8 flex flex-col gap-4 max-sm:mt-6" noValidate>
             <label className="flex flex-col gap-1.5">
               <span className="text-[13px] font-medium">Six-digit code</span>
@@ -358,7 +405,7 @@ export function AuthForm({ initialMode = "login" }: { initialMode?: Mode }) {
           </form>
         )}
 
-        {door === "password" && (
+        {door === "password" && step === "address" && (
           <form ref={form} onSubmit={submitPassword} className="mt-8 flex flex-col gap-4 max-sm:mt-6" noValidate>
             <Field
               label="Email"

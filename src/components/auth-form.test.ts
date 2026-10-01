@@ -1,5 +1,41 @@
 import { describe, expect, it } from "vitest";
-import { normaliseCode, validateCode, validateCredentials, validateEmail } from "./auth-form";
+import { codeSubmission, normaliseCode, validateCode, validateCredentials, validateEmail } from "./auth-form";
+
+/*
+ * Signing up now needs the emailed code, the same as signing in: registering
+ * without one created an account from nothing but a request body. Both flows
+ * end at the same code box, so which endpoint that box posts to is the thing
+ * worth pinning down.
+ */
+describe("codeSubmission", () => {
+  it("verifies and signs in when no password is waiting", () => {
+    const { url, body } = codeSubmission("ada@example.test", "123456", "");
+
+    expect(url).toBe("/api/v1/auth/code/verify");
+    expect(body).toEqual({ email: "ada@example.test", code: "123456" });
+  });
+
+  it("registers with the password the person chose", () => {
+    const { url, body } = codeSubmission("ada@example.test", "123456", "correct-horse-battery");
+
+    expect(url).toBe("/api/v1/auth/register");
+    expect(body).toEqual({
+      username: "ada@example.test",
+      password: "correct-horse-battery",
+      code: "123456",
+    });
+  });
+
+  // The sign-in door must never send a password field, and the register door
+  // must never omit the code: either would be a different endpoint's shape.
+  it("never sends a password to the verify endpoint", () => {
+    expect(codeSubmission("ada@example.test", "123456", "")).not.toHaveProperty("body.password");
+  });
+
+  it("always carries the code when registering", () => {
+    expect(codeSubmission("ada@example.test", "123456", "pw")).toHaveProperty("body.code", "123456");
+  });
+});
 
 describe("validateEmail", () => {
   it("asks for an address first", () => {
